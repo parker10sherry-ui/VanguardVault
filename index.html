@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vanguard Vault — Sherry's Trading Cards</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <div class="header-left">
+            <h1 class="logo">VANGUARD <span>VAULT</span></h1>
+            <p class="subtitle">Sherry's Trading Cards</p>
+        </div>
+        <div class="header-right">
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="Search players, cards...">
+            </div>
+            <div class="toggle-container" id="privateToggle">
+                <label class="toggle-label">Purchase Info</label>
+                <label class="switch">
+                    <input type="checkbox" id="toggleH">
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </div>
+    </header>
+
+    <nav class="filter-bar">
+        <button class="filter-btn active" data-filter="all">All Players</button>
+    </nav>
+
+    <main id="cardGrid"></main>
+
+    <script src="data.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
