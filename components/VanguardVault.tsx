@@ -1327,8 +1327,10 @@ export default function VanguardVault() {
               <div className="pro-chart-bars">
                 {portfolioBreakdown.byPlayer.slice(0, 8).map((p) => {
                   const pct = portfolioBreakdown.totalValue > 0 ? (p.value / portfolioBreakdown.totalValue) * 100 : 0;
+                  // Find player key from full name
+                  const playerKey = Object.entries(players).find(([, info]) => info.full === p.name)?.[0] || "";
                   return (
-                    <div key={p.name} className="chart-bar-row">
+                    <div key={p.name} className="chart-bar-row chart-bar-clickable" onClick={() => { if (playerKey) handleFilterClick(playerKey); }}>
                       <span className="chart-bar-label">{p.name}</span>
                       <div className="chart-bar-track">
                         <div className="chart-bar-fill" style={{ width: `${Math.max(pct, 2)}%` }} />
