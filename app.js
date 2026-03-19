@@ -7,6 +7,65 @@ const modalOverlay = document.getElementById("modalOverlay");
 const modalClose = document.getElementById("modalClose");
 const addCardForm = document.getElementById("addCardForm");
 
+// === GENERATE SHORT KEY FROM FULL NAME ===
+// "Peyton Manning" → "P. Manning", "Jaxon Smith-Njigba" → "J. Smith-Njigba"
+function generatePlayerKey(fullName) {
+    const parts = fullName.trim().split(/\s+/);
+    if (parts.length === 1) return parts[0];
+    const first = parts[0][0] + ".";
+    const rest = parts.slice(1).join(" ");
+    return `${first} ${rest}`;
+}
+
+// === FIND EXISTING PLAYER BY FULL NAME ===
+function findPlayerByFullName(fullName) {
+    const lower = fullName.trim().toLowerCase();
+    for (const [key, info] of Object.entries(PLAYERS)) {
+        if (info.full.toLowerCase() === lower) return key;
+    }
+    return null;
+}
+
+// === FETCH ESPN ID FOR A NEW PLAYER ===
+async function fetchEspnId(fullName) {
+    // Try v2 search first (includes retired players)
+    try {
+        const url = `https://site.web.api.espn.com/apis/search/v2?query=${encodeURIComponent(fullName)}&limit=1&page=1&type=player&sport=football&league=nfl`;
+        const res = await fetch(url);
+        if (res.ok) {
+            const data = await res.json();
+            // v2 returns results nested under data.results or similar
+            const results = data.results || [];
+            for (const group of results) {
+                const items = group.contents || group.items || [];
+                for (const item of items) {
+                    // Extract numeric ID from uid like "s:20~l:28~a:1428"
+                    if (item.uid) {
+                        const match = item.uid.match(/~a:(\d+)/);
+                        if (match) return parseInt(match[1]);
+                    }
+                    // Fallback: use id if it's purely numeric
+                    if (item.id && /^\d+$/.test(item.id)) return parseInt(item.id);
+                }
+            }
+        }
+    } catch (e) { /* try fallback */ }
+
+    // Fallback to v3 search (active players only)
+    try {
+        const url = `https://site.web.api.espn.com/apis/common/v3/search?query=${encodeURIComponent(fullName)}&limit=1&type=player&sport=football`;
+        const res = await fetch(url);
+        if (res.ok) {
+            const data = await res.json();
+            if (data.items && data.items.length > 0) {
+                return parseInt(data.items[0].id);
+            }
+        }
+    } catch (e) { /* silently fall back to no photo */ }
+
+    return null;
+}
+
 // === LOAD USER-ADDED CARDS FROM LOCALSTORAGE ===
 function loadUserCards() {
     try {
@@ -65,11 +124,6 @@ function parsePct(pct) {
     return { dir, num, display: `${arrow} ${clean.replace("U","").replace("D","").trim()}` };
 }
 
-// === GET PLAYER INITIALS FOR FALLBACK ===
-function getInitials(fullName) {
-    return fullName.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase();
-}
-
 // === RENDER ===
 function render(filter = "all", search = "") {
     let filtered = CARDS;
@@ -107,7 +161,6 @@ function render(filter = "all", search = "") {
         const imgUrl = getPlayerImage(playerKey);
         const fallbackUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(info.full)}&background=1e293b&color=d4a843&size=120&bold=true&font-size=0.4`;
 
-        // Calculate total value for this player
         const totalValue = cards.reduce((sum, c) => sum + (c.value || 0), 0);
 
         html += `<section class="player-section" data-player="${playerKey}">`;
@@ -179,29 +232,24 @@ function buildFilters() {
     });
 }
 
-// === POPULATE PLAYER DATALIST ===
+// === POPULATE PLAYER DATALIST (by full name) ===
 function populatePlayerList() {
     const datalist = document.getElementById("playerList");
     datalist.innerHTML = "";
     const seen = new Set();
-    CARDS.forEach(c => {
-        if (!seen.has(c.player)) {
-            seen.add(c.player);
+    for (const info of Object.values(PLAYERS)) {
+        if (!seen.has(info.full)) {
+            seen.add(info.full);
             const opt = document.createElement("option");
-            opt.value = c.player;
-            const info = PLAYERS[c.player];
-            if (info) opt.label = info.full;
+            opt.value = info.full;
             datalist.appendChild(opt);
         }
-    });
+    }
 }
 
 // === MODAL LOGIC ===
 addCardBtn.addEventListener("click", () => {
     populatePlayerList();
-    // Auto-fill full name and team when selecting existing player
-    const playerInput = document.getElementById("formPlayer");
-    playerInput.value = "";
     document.getElementById("formFullName").value = "";
     document.getElementById("formTeam").value = "";
     document.getElementById("formProduct").value = "";
@@ -209,6 +257,7 @@ addCardBtn.addEventListener("click", () => {
     document.getElementById("formPct").value = "";
     document.getElementById("formPctDir").value = "";
     document.getElementById("formRange").value = "";
+    document.getElementById("formYear").value = "2025";
     modalOverlay.classList.add("active");
 });
 
@@ -220,20 +269,18 @@ modalOverlay.addEventListener("click", (e) => {
     if (e.target === modalOverlay) modalOverlay.classList.remove("active");
 });
 
-// Auto-fill player details when selecting from datalist
-document.getElementById("formPlayer").addEventListener("input", function() {
-    const info = PLAYERS[this.value];
-    if (info) {
-        document.getElementById("formFullName").value = info.full;
-        document.getElementById("formTeam").value = info.team;
+// Auto-fill team when selecting an existing player by full name
+document.getElementById("formFullName").addEventListener("input", function() {
+    const existingKey = findPlayerByFullName(this.value);
+    if (existingKey) {
+        document.getElementById("formTeam").value = PLAYERS[existingKey].team;
     }
 });
 
 // === FORM SUBMISSION ===
-addCardForm.addEventListener("submit", (e) => {
+addCardForm.addEventListener("submit", async (e) => {
     e.preventDefault();
 
-    const playerKey = document.getElementById("formPlayer").value.trim();
     const fullName = document.getElementById("formFullName").value.trim();
     const team = document.getElementById("formTeam").value.trim();
     const year = parseInt(document.getElementById("formYear").value);
@@ -244,16 +291,47 @@ addCardForm.addEventListener("submit", (e) => {
     const pctDir = document.getElementById("formPctDir").value;
     const range = document.getElementById("formRange").value.trim();
 
+    if (!fullName) return;
+
     const pct = pctVal ? `${pctVal} ${pctDir}`.trim() : "";
 
-    const card = { year, player: playerKey, product, psa, value, pct, range };
-
-    // If this is a new player, add to PLAYERS
+    // Check if this player already exists (by full name)
+    let playerKey = findPlayerByFullName(fullName);
     let newPlayerData = null;
-    if (!PLAYERS[playerKey] && fullName) {
-        newPlayerData = { full: fullName, team: team || "Unknown" };
+
+    if (!playerKey) {
+        // New player — generate key and look up ESPN headshot
+        playerKey = generatePlayerKey(fullName);
+
+        // Avoid key collisions
+        let baseKey = playerKey;
+        let counter = 2;
+        while (PLAYERS[playerKey]) {
+            playerKey = `${baseKey} ${counter}`;
+            counter++;
+        }
+
+        // Show loading state on button
+        const submitBtn = addCardForm.querySelector(".form-submit");
+        const origText = submitBtn.textContent;
+        submitBtn.textContent = "Looking up player...";
+        submitBtn.disabled = true;
+
+        // Fetch ESPN ID for headshot
+        const espnId = await fetchEspnId(fullName);
+
+        submitBtn.textContent = origText;
+        submitBtn.disabled = false;
+
+        newPlayerData = {
+            full: fullName,
+            team: team || "Unknown",
+            espnId: espnId
+        };
         PLAYERS[playerKey] = newPlayerData;
     }
+
+    const card = { year, player: playerKey, product, psa, value, pct, range };
 
     CARDS.push(card);
     saveUserCard(card, playerKey, newPlayerData);
