@@ -131,6 +131,23 @@ export default function VanguardVault() {
   const [showSold, setShowSold] = useState(false);
   const [unsellCode, setUnsellCode] = useState("");
 
+  // --- PSA state ---
+  const [psaData, setPsaData] = useState<{
+    grade: string; population: number; populationHigher: number;
+    imageUrl: string; externalUrl: string; playerName: string;
+    year: string; product: string; verified: boolean;
+  } | null>(null);
+  const [psaLoading, setPsaLoading] = useState(false);
+  const [psaLookupOpen, setPsaLookupOpen] = useState(false);
+  const [psaLookupCert, setPsaLookupCert] = useState("");
+  const [psaLookupResult, setPsaLookupResult] = useState<{
+    grade: string; population: number; populationHigher: number;
+    imageUrl: string; externalUrl: string; playerName: string;
+    year: string; product: string; certNumber: string;
+  } | null>(null);
+  const [psaLookupLoading, setPsaLookupLoading] = useState(false);
+  const [psaLookupError, setPsaLookupError] = useState<string | null>(null);
+
   // --- Scan state ---
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
@@ -340,6 +357,8 @@ export default function VanguardVault() {
     setSellMode(false);
     setFormSalePrice("");
     setUnsellCode("");
+    setPsaData(null);
+    setPsaLoading(false);
     setScanError(null);
     setScanConfidence(null);
     setScanFrontFile(null);
@@ -382,6 +401,11 @@ export default function VanguardVault() {
     setFormRange(card.range || "");
     setEditingIndex(cardIndex);
     setModalOpen(true);
+
+    // Auto-fetch PSA data if card has a cert number
+    if (card.certNumber) {
+      fetchPsaCert(card.certNumber);
+    }
   };
 
   const handleScanFile = (file: File, side: "front" | "back") => {
@@ -408,6 +432,66 @@ export default function VanguardVault() {
       }
     }
     setScanError(null);
+  };
+
+  const fetchPsaCert = async (certNumber: string) => {
+    try {
+      setPsaLoading(true);
+      const res = await fetch(`/api/psa-cards?certs=${certNumber}`);
+      const data = await res.json();
+      if (data.cards && data.cards.length > 0) {
+        const card = data.cards[0];
+        setPsaData({
+          grade: card.grade,
+          population: card.population,
+          populationHigher: card.populationHigher,
+          imageUrl: card.imageUrl,
+          externalUrl: card.externalUrl,
+          playerName: card.playerName,
+          year: card.year,
+          product: card.product,
+          verified: card.verified,
+        });
+        return card;
+      }
+      return null;
+    } catch {
+      return null;
+    } finally {
+      setPsaLoading(false);
+    }
+  };
+
+  const handlePsaLookup = async () => {
+    const cert = psaLookupCert.trim();
+    if (!cert) return;
+    setPsaLookupLoading(true);
+    setPsaLookupError(null);
+    setPsaLookupResult(null);
+    try {
+      const res = await fetch(`/api/psa-cards?certs=${cert}`);
+      const data = await res.json();
+      if (data.cards && data.cards.length > 0) {
+        const card = data.cards[0];
+        setPsaLookupResult({
+          grade: card.grade,
+          population: card.population,
+          populationHigher: card.populationHigher,
+          imageUrl: card.imageUrl,
+          externalUrl: card.externalUrl,
+          playerName: card.playerName,
+          year: card.year,
+          product: card.product,
+          certNumber: card.certNumber,
+        });
+      } else {
+        setPsaLookupError("No card found for that cert number.");
+      }
+    } catch {
+      setPsaLookupError("Failed to look up cert number.");
+    } finally {
+      setPsaLookupLoading(false);
+    }
   };
 
   const fileToBase64 = (file: File): Promise<{ data: string; mediaType: string }> =>
@@ -474,7 +558,11 @@ export default function VanguardVault() {
       if (card.year) setFormYear(String(card.year));
       if (card.product) setFormProduct(card.product);
       setFormPSA(card.psaGrade != null ? String(card.psaGrade) : "0");
-      if (card.certNumber) setFormCert(card.certNumber);
+      if (card.certNumber) {
+        setFormCert(card.certNumber);
+        // Auto-verify with PSA API
+        fetchPsaCert(card.certNumber);
+      }
       setScanConfidence(card.confidence);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Scan failed";
@@ -637,6 +725,9 @@ export default function VanguardVault() {
           <p className="subtitle">Sherry&apos;s Trading Cards</p>
         </div>
         <div className="header-right">
+          <button className="psa-lookup-btn" onClick={() => { setPsaLookupOpen(!psaLookupOpen); setPsaLookupResult(null); setPsaLookupError(null); setPsaLookupCert(""); }}>
+            PSA Lookup
+          </button>
           <button className="add-card-btn" onClick={() => setModalOpen(true)}>
             + Add Card
           </button>
@@ -650,6 +741,53 @@ export default function VanguardVault() {
           </div>
         </div>
       </header>
+
+      {/* PSA LOOKUP PANEL */}
+      {psaLookupOpen && (
+        <div className="psa-lookup-panel">
+          <div className="psa-lookup-input-row">
+            <input
+              type="text"
+              placeholder="Enter PSA Cert #"
+              value={psaLookupCert}
+              onChange={(e) => setPsaLookupCert(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handlePsaLookup(); }}
+              className="psa-lookup-input"
+            />
+            <button
+              className="psa-lookup-go"
+              onClick={handlePsaLookup}
+              disabled={psaLookupLoading || !psaLookupCert.trim()}
+            >
+              {psaLookupLoading ? "Looking up..." : "Look Up"}
+            </button>
+          </div>
+          {psaLookupError && <div className="psa-lookup-error">{psaLookupError}</div>}
+          {psaLookupResult && (
+            <div className="psa-lookup-result">
+              {psaLookupResult.imageUrl && (
+                <div className="psa-lookup-image">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={psaLookupResult.imageUrl} alt="Card" />
+                </div>
+              )}
+              <div className="psa-lookup-details">
+                <div className="psa-lookup-name">{psaLookupResult.playerName}</div>
+                <div className="psa-lookup-meta">
+                  {psaLookupResult.year} {psaLookupResult.product}
+                </div>
+                <div className="psa-lookup-grade">Grade: {psaLookupResult.grade}</div>
+                <div className="psa-lookup-pop">
+                  Pop: {psaLookupResult.population.toLocaleString()} | Higher: {psaLookupResult.populationHigher.toLocaleString()}
+                </div>
+                <a href={psaLookupResult.externalUrl} target="_blank" rel="noopener noreferrer" className="psa-link">
+                  View on PSA →
+                </a>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* FILTER BAR */}
       <nav className="filter-bar">
@@ -911,15 +1049,46 @@ export default function VanguardVault() {
             </button>
           </div>
 
-          {/* Card Image Display (when editing) */}
-          {editingIndex !== null && (cards[editingIndex]?._psaImageUrl || cards[editingIndex]?.frontImageUrl) && (
+          {/* Card Image Display (PSA image, stored image, or scan preview) */}
+          {editingIndex !== null && (psaData?.imageUrl || cards[editingIndex]?._psaImageUrl || cards[editingIndex]?.frontImageUrl || scanFrontPreview) && (
             <div className="card-image-display">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={cards[editingIndex]?._psaImageUrl || cards[editingIndex]?.frontImageUrl || ""}
+                src={psaData?.imageUrl || cards[editingIndex]?._psaImageUrl || cards[editingIndex]?.frontImageUrl || scanFrontPreview || ""}
                 alt="Card"
                 className="card-image-large"
               />
+            </div>
+          )}
+
+          {/* PSA Verification Data */}
+          {psaLoading && (
+            <div className="psa-info-section">
+              <span className="psa-loading">Verifying with PSA...</span>
+            </div>
+          )}
+          {psaData && !psaLoading && (
+            <div className="psa-info-section">
+              <div className="psa-verified-badge">PSA VERIFIED</div>
+              <div className="psa-info-grid">
+                <div className="psa-info-item">
+                  <span className="psa-info-label">Grade</span>
+                  <span className="psa-info-value">{psaData.grade}</span>
+                </div>
+                <div className="psa-info-item">
+                  <span className="psa-info-label">Population</span>
+                  <span className="psa-info-value">{psaData.population.toLocaleString()}</span>
+                </div>
+                <div className="psa-info-item">
+                  <span className="psa-info-label">Pop Higher</span>
+                  <span className="psa-info-value">{psaData.populationHigher.toLocaleString()}</span>
+                </div>
+              </div>
+              {psaData.externalUrl && (
+                <a href={psaData.externalUrl} target="_blank" rel="noopener noreferrer" className="psa-link">
+                  View on PSA →
+                </a>
+              )}
             </div>
           )}
 
