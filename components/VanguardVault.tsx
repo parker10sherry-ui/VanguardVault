@@ -1239,6 +1239,7 @@ export default function VanguardVault() {
                 const info = players[c.player];
                 const pct = parsePct(c.pct || "");
                 const imgSrc = c.frontImageUrl || c._psaImageUrl || null;
+                const playerImg = getPlayerImage(players, c.player);
                 return (
                   <div key={ci.originalIndex} className="pro-grid-card" onClick={() => handleEditCard(ci.originalIndex)}>
                     <div className="grid-card-image">
@@ -1263,6 +1264,10 @@ export default function VanguardVault() {
                         )}
                         <span className={`grid-psa-badge psa-${c.psa}`}>{c.psa === 0 ? "Raw" : c.psa}</span>
                       </div>
+                      {playerImg && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={playerImg} alt={info?.full || c.player} className="grid-player-headshot" />
+                      )}
                     </div>
                   </div>
                 );
