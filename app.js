@@ -15,6 +15,7 @@ const refreshBtn = document.getElementById("refreshBtn");
 const statusSource = document.getElementById("statusSource");
 const statusUpdated = document.getElementById("statusUpdated");
 const statusError = document.getElementById("statusError");
+const providerSelect = document.getElementById("providerSelect");
 
 // === HELPERS ===
 
@@ -344,6 +345,18 @@ searchInput.addEventListener("input", () => {
 
 refreshBtn.addEventListener("click", async () => {
     await CardDataService.refresh();
+    buildFilters();
+    render("all", searchInput.value);
+});
+
+// === PROVIDER SELECTOR ===
+const PROVIDERS = { local: LocalProvider, mock: MockProvider, alt: AltProvider };
+
+providerSelect.addEventListener("change", async () => {
+    const key = providerSelect.value;
+    const provider = PROVIDERS[key];
+    CardDataService.setProvider(provider);
+    await CardDataService.load();
     buildFilters();
     render("all", searchInput.value);
 });

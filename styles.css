@@ -152,6 +152,25 @@ header {
     color: var(--accent-red);
     font-weight: 500;
 }
+.provider-select {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    transition: border-color 0.2s;
+}
+.provider-select:focus {
+    outline: none;
+    border-color: var(--accent-gold);
+}
+.provider-select option {
+    background: var(--bg-card);
+    color: var(--text-primary);
+}
 .refresh-btn {
     background: var(--bg-card);
     border: 1px solid var(--border);
