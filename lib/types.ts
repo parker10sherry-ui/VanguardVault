@@ -19,6 +19,10 @@ export interface Card {
   range?: string;
   purchase?: string;
   certNumber?: string;
+  salePrice?: number | null;
+  soldAt?: string | null;
+  frontImageUrl?: string | null;
+  backImageUrl?: string | null;
   _source?: string;
   _updatedAt?: string;
   _psaVerified?: boolean;

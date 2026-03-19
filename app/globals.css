@@ -102,26 +102,28 @@ header {
     background: var(--header-bg);
     border-bottom: 1px solid var(--border);
     display: flex;
+    align-items: center;
     gap: 0.5rem;
-    flex-wrap: wrap;
-    overflow-x: auto;
 }
-.filter-btn {
+.filter-select {
     background: var(--bg-card);
     border: 1px solid var(--border);
-    color: var(--text-secondary);
-    padding: 0.4rem 0.9rem;
-    border-radius: 20px;
-    font-size: 0.8rem;
+    color: var(--text-primary);
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    font-size: 0.85rem;
     cursor: pointer;
-    transition: all 0.2s;
-    white-space: nowrap;
+    font-family: 'Inter', sans-serif;
+    transition: border-color 0.2s;
+    min-width: 220px;
 }
-.filter-btn:hover, .filter-btn.active {
-    background: var(--accent-gold);
-    color: var(--bg-dark);
+.filter-select:focus {
+    outline: none;
     border-color: var(--accent-gold);
-    font-weight: 600;
+}
+.filter-select option {
+    background: var(--bg-card);
+    color: var(--text-primary);
 }
 
 /* === STATUS BAR === */
@@ -373,9 +375,13 @@ main {
 }
 .form-group {
     flex: 1;
+    min-width: 0;
     display: flex;
     flex-direction: column;
     gap: 0.3rem;
+}
+.form-group.year-group {
+    flex: 0 0 90px;
 }
 .form-group.full-width { flex: 1 1 100%; }
 
@@ -570,6 +576,143 @@ main {
 ::-webkit-scrollbar-track { background: var(--bg-dark); }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* === CARD IMAGE DISPLAY === */
+.card-image-display {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 1.25rem;
+    padding-bottom: 1.25rem;
+    border-bottom: 1px solid var(--border);
+}
+.card-image-large {
+    max-width: 100%;
+    max-height: 250px;
+    object-fit: contain;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+}
+
+/* === SELL CARD SECTION === */
+.sell-section {
+    margin-top: 1rem;
+    border-top: 1px solid var(--border);
+    padding-top: 1rem;
+}
+.sell-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--accent-red);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 0.5rem 0;
+}
+.sell-toggle {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+.sell-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+}
+.sell-profit-preview {
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-dark);
+    border-radius: 6px;
+}
+.sell-confirm-btn {
+    background: var(--accent-red);
+    color: #fff;
+    border: none;
+    padding: 0.65rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    transition: all 0.2s;
+}
+.sell-confirm-btn:hover:not(:disabled) {
+    background: #dc2626;
+    transform: translateY(-1px);
+}
+.sell-confirm-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* === SOLD CARD INFO === */
+.sold-info-section {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: var(--bg-dark);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+}
+.sold-info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.35rem 0;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+.sold-info-value {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* === SOLD CARDS SECTION (main view) === */
+.sold-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 0;
+    margin-top: 2rem;
+    border-top: 2px solid var(--accent-gold);
+    cursor: pointer;
+}
+.sold-section-header h2 {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+.sold-profit-summary {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+}
+.sold-total-profit {
+    font-weight: 700;
+    font-size: 0.95rem;
+}
+.sold-toggle {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+.profit-positive { color: var(--accent-green); }
+.profit-negative { color: var(--accent-red); }
+
+.sold-player-section {
+    opacity: 0.75;
+}
+.sold-table td.sold-date {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+.sold-table td.profit {
+    font-weight: 700;
+}
 
 /* No results */
 .no-results {

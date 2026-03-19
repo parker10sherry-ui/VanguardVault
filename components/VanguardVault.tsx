@@ -125,6 +125,11 @@ export default function VanguardVault() {
   const [formCert, setFormCert] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  // --- Sell state ---
+  const [sellMode, setSellMode] = useState(false);
+  const [formSalePrice, setFormSalePrice] = useState("");
+  const [showSold, setShowSold] = useState(false);
+
   // --- Scan state ---
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
@@ -206,9 +211,15 @@ export default function VanguardVault() {
   // --- Filter + search ---
   // Each entry tracks the card AND its original index in the cards array
   type CardWithIndex = { card: Card; originalIndex: number };
-  const { groups, order } = useMemo(() => {
+  const { groups, order, soldGroups, soldOrder, totalProfit } = useMemo(() => {
     const indexed: CardWithIndex[] = cards.map((card, i) => ({ card, originalIndex: i }));
-    let filtered = indexed;
+
+    // Separate active vs sold
+    const active = indexed.filter((ci) => !ci.card.soldAt);
+    const sold = indexed.filter((ci) => !!ci.card.soldAt);
+
+    // Apply filter + search to active cards
+    let filtered = active;
     if (filter !== "all") {
       filtered = filtered.filter((ci) => ci.card.player === filter);
     }
@@ -237,20 +248,39 @@ export default function VanguardVault() {
       }
       g[ci.card.player].push(ci);
     });
-    return { groups: g, order: o };
+
+    // Group sold cards
+    const sg: Record<string, CardWithIndex[]> = {};
+    const so: string[] = [];
+    let profit = 0;
+    sold.forEach((ci) => {
+      if (!sg[ci.card.player]) {
+        sg[ci.card.player] = [];
+        so.push(ci.card.player);
+      }
+      sg[ci.card.player].push(ci);
+      profit += (ci.card.salePrice || 0) - (ci.card.value || 0);
+    });
+
+    return { groups: g, order: o, soldGroups: sg, soldOrder: so, totalProfit: profit };
   }, [cards, players, filter, search]);
 
-  // Unique players for filter buttons
+  // Unique players for filter dropdown (alphabetical by full name)
   const filterPlayers = useMemo(() => {
     const seen = new Set<string>();
-    return cards
+    const keys = cards
       .filter((c) => {
         if (seen.has(c.player)) return false;
         seen.add(c.player);
         return true;
       })
       .map((c) => c.player);
-  }, [cards]);
+    return keys.sort((a, b) => {
+      const nameA = (players[a]?.full || a).toLowerCase();
+      const nameB = (players[b]?.full || b).toLowerCase();
+      return nameA.localeCompare(nameB);
+    });
+  }, [cards, players]);
 
   // Player names for form datalist
   const playerNames = useMemo(() => {
@@ -306,6 +336,8 @@ export default function VanguardVault() {
     setFormYear("2025");
     setFormPSA("10");
     setEditingIndex(null);
+    setSellMode(false);
+    setFormSalePrice("");
     setScanError(null);
     setScanConfidence(null);
     setScanFrontFile(null);
@@ -532,6 +564,35 @@ export default function VanguardVault() {
     setSubmitting(false);
   };
 
+  const handleSellCard = async () => {
+    if (editingIndex === null) return;
+    const salePrice = parseFloat(formSalePrice);
+    if (isNaN(salePrice) || salePrice <= 0) return;
+
+    setSubmitting(true);
+    const existingCard = cards[editingIndex];
+    const soldCard: Card = {
+      ...existingCard,
+      salePrice,
+      soldAt: new Date().toISOString(),
+    };
+
+    const provider = PROVIDERS[activeProvider];
+    if (existingCard?.id && provider.updateCard) {
+      await provider.updateCard(existingCard.id, soldCard);
+    }
+
+    setCards((prev) => {
+      const updated = [...prev];
+      updated[editingIndex] = soldCard;
+      return updated;
+    });
+
+    setModalOpen(false);
+    resetForm();
+    setSubmitting(false);
+  };
+
   // ============================================================
   // Render
   // ============================================================
@@ -562,24 +623,21 @@ export default function VanguardVault() {
 
       {/* FILTER BAR */}
       <nav className="filter-bar">
-        <button
-          className={`filter-btn ${filter === "all" ? "active" : ""}`}
-          onClick={() => handleFilterClick("all")}
+        <select
+          className="filter-select"
+          value={filter}
+          onChange={(e) => handleFilterClick(e.target.value)}
         >
-          All Players
-        </button>
-        {filterPlayers.map((key) => {
-          const info = players[key] || { full: key };
-          return (
-            <button
-              key={key}
-              className={`filter-btn ${filter === key ? "active" : ""}`}
-              onClick={() => handleFilterClick(key)}
-            >
-              {info.full}
-            </button>
-          );
-        })}
+          <option value="all">All Players ({filterPlayers.length})</option>
+          {filterPlayers.map((key) => {
+            const info = players[key] || { full: key };
+            return (
+              <option key={key} value={key}>
+                {info.full}
+              </option>
+            );
+          })}
+        </select>
       </nav>
 
       {/* STATUS BAR */}
@@ -740,6 +798,69 @@ export default function VanguardVault() {
             );
           })
         )}
+
+        {/* SOLD CARDS SECTION */}
+        {soldOrder.length > 0 && (
+          <>
+            <div className="sold-section-header" onClick={() => setShowSold(!showSold)}>
+              <h2>Sold Cards ({soldOrder.reduce((sum, k) => sum + soldGroups[k].length, 0)})</h2>
+              <div className="sold-profit-summary">
+                <span className={`sold-total-profit ${totalProfit >= 0 ? "profit-positive" : "profit-negative"}`}>
+                  Total Profit: {totalProfit >= 0 ? "+" : ""}${totalProfit.toLocaleString()}
+                </span>
+                <span className="sold-toggle">{showSold ? "▲ Hide" : "▼ Show"}</span>
+              </div>
+            </div>
+            {showSold && soldOrder.map((playerKey) => {
+              const playerCards = soldGroups[playerKey];
+              const info = players[playerKey] || { full: playerKey, team: "" };
+              return (
+                <section key={`sold-${playerKey}`} className="player-section sold-player-section">
+                  <div className="player-header">
+                    <div className="player-info">
+                      <h2>{info.full}</h2>
+                      <span className="team">{info.team}</span>
+                    </div>
+                  </div>
+                  <table className="card-table sold-table">
+                    <thead>
+                      <tr>
+                        <th>Year</th>
+                        <th>Product</th>
+                        <th>PSA</th>
+                        <th>Cost</th>
+                        <th>Sale Price</th>
+                        <th>Profit</th>
+                        <th>Sold Date</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {playerCards.map((ci, i) => {
+                        const c = ci.card;
+                        const profit = (c.salePrice || 0) - (c.value || 0);
+                        return (
+                          <tr key={`sold-${c.player}-${i}`} className="card-row-clickable" onClick={() => handleEditCard(ci.originalIndex)}>
+                            <td className="year">{c.year}</td>
+                            <td className="product">{c.product || "\u2014"}</td>
+                            <td className={`psa psa-${c.psa}`}>{c.psa === 0 ? "Raw" : c.psa}</td>
+                            <td className="value">${c.value}</td>
+                            <td className="value">${c.salePrice?.toLocaleString()}</td>
+                            <td className={`profit ${profit >= 0 ? "profit-positive" : "profit-negative"}`}>
+                              {profit >= 0 ? "+" : ""}${profit.toLocaleString()}
+                            </td>
+                            <td className="sold-date">
+                              {c.soldAt ? new Date(c.soldAt).toLocaleDateString() : "\u2014"}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </section>
+              );
+            })}
+          </>
+        )}
       </main>
 
       {/* ADD CARD MODAL */}
@@ -751,7 +872,7 @@ export default function VanguardVault() {
       >
         <div className="modal">
           <div className="modal-header">
-            <h3>{editingIndex !== null ? "Edit Card" : "Add New Card"}</h3>
+            <h3>{editingIndex !== null ? (cards[editingIndex]?.soldAt ? "Sold Card" : "Edit Card") : "Add New Card"}</h3>
             <button
               className="modal-close"
               onClick={() => setModalOpen(false)}
@@ -759,6 +880,18 @@ export default function VanguardVault() {
               &times;
             </button>
           </div>
+
+          {/* Card Image Display (when editing) */}
+          {editingIndex !== null && (cards[editingIndex]?._psaImageUrl || cards[editingIndex]?.frontImageUrl) && (
+            <div className="card-image-display">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={cards[editingIndex]?._psaImageUrl || cards[editingIndex]?.frontImageUrl || ""}
+                alt="Card"
+                className="card-image-large"
+              />
+            </div>
+          )}
 
           {/* Scan Card Section */}
           <div className="scan-section">
@@ -859,7 +992,7 @@ export default function VanguardVault() {
                   onChange={(e) => setFormTeam(e.target.value)}
                 />
               </div>
-              <div className="form-group">
+              <div className="form-group year-group">
                 <label>Year</label>
                 <input
                   type="number"
@@ -955,6 +1088,77 @@ export default function VanguardVault() {
               {submitting ? "Saving..." : editingIndex !== null ? "Save Changes" : "Add Card"}
             </button>
           </form>
+
+          {/* Sell Card Section (only when editing an active card) */}
+          {editingIndex !== null && !cards[editingIndex]?.soldAt && (
+            <div className="sell-section">
+              <div className="sell-section-header" onClick={() => setSellMode(!sellMode)}>
+                <span>Sell This Card</span>
+                <span className="sell-toggle">{sellMode ? "▲" : "▼"}</span>
+              </div>
+              {sellMode && (
+                <div className="sell-form">
+                  <div className="form-group">
+                    <label>Sale Price ($)</label>
+                    <input
+                      type="number"
+                      placeholder="Enter sale amount"
+                      value={formSalePrice}
+                      onChange={(e) => setFormSalePrice(e.target.value)}
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+                  {formSalePrice && parseFloat(formSalePrice) > 0 && (
+                    <div className="sell-profit-preview">
+                      <span>Profit: </span>
+                      <span className={
+                        (parseFloat(formSalePrice) - (cards[editingIndex]?.value || 0)) >= 0
+                          ? "profit-positive" : "profit-negative"
+                      }>
+                        {(parseFloat(formSalePrice) - (cards[editingIndex]?.value || 0)) >= 0 ? "+" : ""}
+                        ${(parseFloat(formSalePrice) - (cards[editingIndex]?.value || 0)).toLocaleString()}
+                      </span>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    className="sell-confirm-btn"
+                    disabled={submitting || !formSalePrice || parseFloat(formSalePrice) <= 0}
+                    onClick={handleSellCard}
+                  >
+                    {submitting ? "Processing..." : "Confirm Sale"}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Sold card info (when viewing a sold card) */}
+          {editingIndex !== null && cards[editingIndex]?.soldAt && (
+            <div className="sold-info-section">
+              <div className="sold-info-row">
+                <span>Sale Price:</span>
+                <span className="sold-info-value">${cards[editingIndex]?.salePrice?.toLocaleString()}</span>
+              </div>
+              <div className="sold-info-row">
+                <span>Profit:</span>
+                <span className={
+                  ((cards[editingIndex]?.salePrice || 0) - (cards[editingIndex]?.value || 0)) >= 0
+                    ? "profit-positive" : "profit-negative"
+                }>
+                  {((cards[editingIndex]?.salePrice || 0) - (cards[editingIndex]?.value || 0)) >= 0 ? "+" : ""}
+                  ${((cards[editingIndex]?.salePrice || 0) - (cards[editingIndex]?.value || 0)).toLocaleString()}
+                </span>
+              </div>
+              <div className="sold-info-row">
+                <span>Sold:</span>
+                <span className="sold-info-value">
+                  {new Date(cards[editingIndex]?.soldAt || "").toLocaleString()}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </>

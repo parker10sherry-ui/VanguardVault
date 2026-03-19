@@ -22,6 +22,10 @@ function rowToCard(row: Record<string, unknown>): Card {
     purchase: (row.purchase as string) || "",
     certNumber: (row.cert_number as string) || undefined,
     _source: (row.source as string) || undefined,
+    salePrice: (row.sale_price as number) || null,
+    soldAt: (row.sold_at as string) || null,
+    frontImageUrl: (row.front_image_url as string) || null,
+    backImageUrl: (row.back_image_url as string) || null,
     _psaVerified: (row.psa_verified as boolean) || false,
     _psaImageUrl: (row.psa_image_url as string) || undefined,
     _psaPopulation: (row.psa_population as number) || undefined,
@@ -117,6 +121,8 @@ export const SupabaseProvider: DataProvider = {
         pct: card.pct || "",
         range: card.range || "",
         cert_number: card.certNumber || null,
+        sale_price: card.salePrice || null,
+        sold_at: card.soldAt || null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", id);
