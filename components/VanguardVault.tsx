@@ -2,13 +2,13 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import type { Card, PlayerInfo, DataStatus, DataProvider } from "@/lib/types";
-import { LocalProvider, MockProvider, AltProvider, PSAProvider } from "@/lib/providers";
-import { updateCardAtIndex } from "@/lib/providers/localProvider";
+import { LocalProvider, MockProvider, AltProvider, PSAProvider, SupabaseProvider } from "@/lib/providers";
 
 // ============================================================
 // Provider registry
 // ============================================================
 const PROVIDERS: Record<string, DataProvider> = {
+  supabase: SupabaseProvider,
   local: LocalProvider,
   mock: MockProvider,
   psa: PSAProvider,
@@ -99,12 +99,12 @@ export default function VanguardVault() {
   const [cards, setCards] = useState<Card[]>([]);
   const [players, setPlayers] = useState<Record<string, PlayerInfo>>({});
   const [status, setStatus] = useState<DataStatus>({
-    source: "Local",
+    source: "Supabase",
     lastUpdated: null,
     loading: true,
     error: null,
   });
-  const [activeProvider, setActiveProvider] = useState("local");
+  const [activeProvider, setActiveProvider] = useState("supabase");
 
   // --- UI state ---
   const [filter, setFilter] = useState("all");
@@ -501,21 +501,29 @@ export default function VanguardVault() {
     const certNumber = formCert.trim() || undefined;
     const card: Card = { year, player: playerKey, product, psa, value, pct, range, certNumber };
 
+    const provider = PROVIDERS[activeProvider];
+
     if (editingIndex !== null) {
       // --- EDIT MODE ---
-      updateCardAtIndex(editingIndex, card);
+      const existingCard = cards[editingIndex];
+      if (existingCard?.id && provider.updateCard) {
+        // Database-backed provider (Supabase)
+        await provider.updateCard(existingCard.id, card);
+      }
+      // Update local state immediately
       setCards((prev) => {
         const updated = [...prev];
-        updated[editingIndex] = card;
+        updated[editingIndex] = { ...card, id: existingCard?.id };
         return updated;
       });
     } else {
       // --- ADD MODE ---
-      await LocalProvider.saveCard(card, playerKey, newPlayerData);
-      setCards((prev) => [...prev, card]);
+      await provider.saveCard(card, playerKey, newPlayerData);
+      // Re-fetch to get the server-assigned ID
+      await loadData(activeProvider);
     }
 
-    if (newPlayerData) {
+    if (newPlayerData && !provider.canSave) {
       setPlayers((prev) => ({ ...prev, [playerKey!]: newPlayerData! }));
     }
 
@@ -593,10 +601,10 @@ export default function VanguardVault() {
             value={activeProvider}
             onChange={(e) => handleProviderChange(e.target.value)}
           >
+            <option value="supabase">Cloud</option>
             <option value="local">Local</option>
             <option value="mock">Mock (Sim)</option>
             <option value="psa">PSA Verified</option>
-            <option value="alt">Alt (Live)</option>
           </select>
           <button
             className={`refresh-btn ${status.loading ? "spinning" : ""}`}

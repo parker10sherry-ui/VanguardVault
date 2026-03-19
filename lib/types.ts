@@ -9,6 +9,7 @@ export interface PlayerInfo {
 }
 
 export interface Card {
+  id?: number;
   year: number;
   player: string;
   product: string;
@@ -55,6 +56,8 @@ export interface DataProvider {
   fetchCards(): Promise<Card[]>;
   fetchPlayers(): Promise<Record<string, PlayerInfo>>;
   saveCard(card: Card, playerKey: string, playerData?: PlayerInfo | null): Promise<void>;
+  updateCard?(id: number, card: Card): Promise<void>;
+  deleteCard?(id: number): Promise<void>;
 }
 
 /** Shape returned by GET /api/alt-cards */
