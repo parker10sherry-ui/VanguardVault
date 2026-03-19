@@ -127,6 +127,10 @@ export default function VanguardVault() {
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
   const [scanConfidence, setScanConfidence] = useState<string | null>(null);
+  const [scanFrontFile, setScanFrontFile] = useState<File | null>(null);
+  const [scanBackFile, setScanBackFile] = useState<File | null>(null);
+  const [scanFrontPreview, setScanFrontPreview] = useState<string | null>(null);
+  const [scanBackPreview, setScanBackPreview] = useState<string | null>(null);
 
   // --- Data loading ---
   const loadData = useCallback(async (providerKey: string) => {
@@ -297,30 +301,47 @@ export default function VanguardVault() {
     setFormPSA("10");
     setScanError(null);
     setScanConfidence(null);
+    setScanFrontFile(null);
+    setScanBackFile(null);
+    setScanFrontPreview(null);
+    setScanBackPreview(null);
   };
 
-  const handleScanCard = async (files: FileList) => {
+  const handleScanFile = (file: File, side: "front" | "back") => {
+    const url = URL.createObjectURL(file);
+    if (side === "front") {
+      setScanFrontFile(file);
+      setScanFrontPreview(url);
+    } else {
+      setScanBackFile(file);
+      setScanBackPreview(url);
+    }
+    setScanError(null);
+  };
+
+  const fileToBase64 = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve((reader.result as string).split(",")[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+  const handleScanSubmit = async () => {
+    if (!scanFrontFile || !scanBackFile) {
+      setScanError("Please take photos of both the front and back of the card.");
+      return;
+    }
+
     setScanning(true);
     setScanError(null);
     setScanConfidence(null);
 
     try {
-      // Convert files to base64
-      const images: { data: string; mediaType: string }[] = [];
-      for (let i = 0; i < Math.min(files.length, 4); i++) {
-        const file = files[i];
-        const base64 = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => {
-            const result = reader.result as string;
-            // Strip the data:image/...;base64, prefix
-            resolve(result.split(",")[1]);
-          };
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-        images.push({ data: base64, mediaType: file.type || "image/jpeg" });
-      }
+      const images = [
+        { data: await fileToBase64(scanFrontFile), mediaType: scanFrontFile.type || "image/jpeg" },
+        { data: await fileToBase64(scanBackFile), mediaType: scanBackFile.type || "image/jpeg" },
+      ];
 
       const res = await fetch("/api/scan-card", {
         method: "POST",
@@ -635,26 +656,66 @@ export default function VanguardVault() {
 
           {/* Scan Card Section */}
           <div className="scan-section">
-            <label className="scan-btn" htmlFor="scan-input">
-              {scanning ? "Scanning..." : "Scan Card"}
-            </label>
-            <input
-              id="scan-input"
-              type="file"
-              accept="image/*"
-              capture="environment"
-              multiple
-              style={{ display: "none" }}
-              disabled={scanning}
-              onChange={(e) => {
-                if (e.target.files && e.target.files.length > 0) {
-                  handleScanCard(e.target.files);
-                  e.target.value = "";
-                }
-              }}
-            />
+            <div className="scan-photos">
+              <div className="scan-photo-slot">
+                <label className="scan-photo-label" htmlFor="scan-front">
+                  {scanFrontPreview ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={scanFrontPreview} alt="Front" className="scan-preview" />
+                  ) : (
+                    <span>FRONT</span>
+                  )}
+                </label>
+                <input
+                  id="scan-front"
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  style={{ display: "none" }}
+                  disabled={scanning}
+                  onChange={(e) => {
+                    if (e.target.files?.[0]) {
+                      handleScanFile(e.target.files[0], "front");
+                      e.target.value = "";
+                    }
+                  }}
+                />
+              </div>
+              <div className="scan-photo-slot">
+                <label className="scan-photo-label" htmlFor="scan-back">
+                  {scanBackPreview ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={scanBackPreview} alt="Back" className="scan-preview" />
+                  ) : (
+                    <span>BACK</span>
+                  )}
+                </label>
+                <input
+                  id="scan-back"
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  style={{ display: "none" }}
+                  disabled={scanning}
+                  onChange={(e) => {
+                    if (e.target.files?.[0]) {
+                      handleScanFile(e.target.files[0], "back");
+                      e.target.value = "";
+                    }
+                  }}
+                />
+              </div>
+              <button
+                type="button"
+                className="scan-btn"
+                disabled={scanning || !scanFrontFile || !scanBackFile}
+                onClick={handleScanSubmit}
+              >
+                {scanning ? "Scanning..." : "Scan Card"}
+              </button>
+            </div>
             <span className="scan-hint">
-              Take a photo of front &amp; back to auto-fill
+              Take a photo of the front and back to auto-fill
             </span>
             {scanError && <span className="scan-error">{scanError}</span>}
             {scanConfidence && (
