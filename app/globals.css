@@ -379,6 +379,7 @@ main {
     display: flex;
     flex-direction: column;
     gap: 0.3rem;
+    overflow: hidden;
 }
 .form-group.year-group {
     flex: 0 0 90px;
@@ -410,9 +411,10 @@ main {
 .pct-input-group {
     display: flex;
     gap: 0.5rem;
+    min-width: 0;
 }
-.pct-input-group input { flex: 1; }
-.pct-input-group select { width: 80px; }
+.pct-input-group input { flex: 1; min-width: 0; }
+.pct-input-group select { flex: 0 0 70px; min-width: 0; }
 
 .form-submit {
     width: 100%;
@@ -668,6 +670,51 @@ main {
 .sold-info-value {
     font-weight: 600;
     color: var(--text-primary);
+}
+.unsell-section {
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border);
+}
+.unsell-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+.unsell-code-input {
+    flex: 1;
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    padding: 0.4rem 0.6rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-family: 'Inter', sans-serif;
+}
+.unsell-code-input:focus {
+    outline: none;
+    border-color: var(--accent-gold);
+}
+.unsell-btn {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 0.4rem 0.8rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+.unsell-btn:hover:not(:disabled) {
+    border-color: var(--accent-gold);
+    color: var(--accent-gold);
+}
+.unsell-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
 }
 
 /* === SOLD CARDS SECTION (main view) === */

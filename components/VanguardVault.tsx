@@ -129,6 +129,7 @@ export default function VanguardVault() {
   const [sellMode, setSellMode] = useState(false);
   const [formSalePrice, setFormSalePrice] = useState("");
   const [showSold, setShowSold] = useState(false);
+  const [unsellCode, setUnsellCode] = useState("");
 
   // --- Scan state ---
   const [scanning, setScanning] = useState(false);
@@ -338,6 +339,7 @@ export default function VanguardVault() {
     setEditingIndex(null);
     setSellMode(false);
     setFormSalePrice("");
+    setUnsellCode("");
     setScanError(null);
     setScanConfidence(null);
     setScanFrontFile(null);
@@ -585,6 +587,34 @@ export default function VanguardVault() {
     setCards((prev) => {
       const updated = [...prev];
       updated[editingIndex] = soldCard;
+      return updated;
+    });
+
+    setModalOpen(false);
+    resetForm();
+    setSubmitting(false);
+  };
+
+  const handleUnsellCard = async () => {
+    if (editingIndex === null) return;
+    if (unsellCode !== "0319") return;
+
+    setSubmitting(true);
+    const existingCard = cards[editingIndex];
+    const restoredCard: Card = {
+      ...existingCard,
+      salePrice: null,
+      soldAt: null,
+    };
+
+    const provider = PROVIDERS[activeProvider];
+    if (existingCard?.id && provider.updateCard) {
+      await provider.updateCard(existingCard.id, restoredCard);
+    }
+
+    setCards((prev) => {
+      const updated = [...prev];
+      updated[editingIndex] = restoredCard;
       return updated;
     });
 
@@ -1156,6 +1186,25 @@ export default function VanguardVault() {
                 <span className="sold-info-value">
                   {new Date(cards[editingIndex]?.soldAt || "").toLocaleString()}
                 </span>
+              </div>
+              <div className="unsell-section">
+                <div className="unsell-row">
+                  <input
+                    type="password"
+                    placeholder="Enter code to reverse"
+                    value={unsellCode}
+                    onChange={(e) => setUnsellCode(e.target.value)}
+                    className="unsell-code-input"
+                  />
+                  <button
+                    type="button"
+                    className="unsell-btn"
+                    disabled={submitting || unsellCode !== "0319"}
+                    onClick={handleUnsellCard}
+                  >
+                    Reverse Sale
+                  </button>
+                </div>
               </div>
             </div>
           )}
