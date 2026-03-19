@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import type { Card, PlayerInfo, DataStatus, DataProvider } from "@/lib/types";
-import { LocalProvider, MockProvider, AltProvider } from "@/lib/providers";
+import { LocalProvider, MockProvider, AltProvider, PSAProvider } from "@/lib/providers";
 
 // ============================================================
 // Provider registry
@@ -10,6 +10,7 @@ import { LocalProvider, MockProvider, AltProvider } from "@/lib/providers";
 const PROVIDERS: Record<string, DataProvider> = {
   local: LocalProvider,
   mock: MockProvider,
+  psa: PSAProvider,
   alt: AltProvider,
 };
 
@@ -119,6 +120,7 @@ export default function VanguardVault() {
   const [formPct, setFormPct] = useState("");
   const [formPctDir, setFormPctDir] = useState("");
   const [formRange, setFormRange] = useState("");
+  const [formCert, setFormCert] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   // --- Data loading ---
@@ -285,6 +287,7 @@ export default function VanguardVault() {
     setFormPct("");
     setFormPctDir("");
     setFormRange("");
+    setFormCert("");
     setFormYear("2025");
     setFormPSA("10");
   };
@@ -329,7 +332,8 @@ export default function VanguardVault() {
       newPlayerData = { full: fullName, team: team || "Unknown", espnId };
     }
 
-    const card: Card = { year, player: playerKey, product, psa, value, pct, range };
+    const certNumber = formCert.trim() || undefined;
+    const card: Card = { year, player: playerKey, product, psa, value, pct, range, certNumber };
 
     await LocalProvider.saveCard(card, playerKey, newPlayerData);
 
@@ -414,7 +418,8 @@ export default function VanguardVault() {
             onChange={(e) => handleProviderChange(e.target.value)}
           >
             <option value="local">Local</option>
-            <option value="mock">Mock (Alt Sim)</option>
+            <option value="mock">Mock (Sim)</option>
+            <option value="psa">PSA Verified</option>
             <option value="alt">Alt (Live)</option>
           </select>
           <button
@@ -661,13 +666,22 @@ export default function VanguardVault() {
               </div>
             </div>
             <div className="form-row">
-              <div className="form-group full-width">
+              <div className="form-group">
                 <label>6-Month Range</label>
                 <input
                   type="text"
                   placeholder="e.g. 45-108"
                   value={formRange}
                   onChange={(e) => setFormRange(e.target.value)}
+                />
+              </div>
+              <div className="form-group">
+                <label>PSA Cert #</label>
+                <input
+                  type="text"
+                  placeholder="e.g. 12345678"
+                  value={formCert}
+                  onChange={(e) => setFormCert(e.target.value)}
                 />
               </div>
             </div>

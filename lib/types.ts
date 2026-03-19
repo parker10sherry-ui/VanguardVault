@@ -17,8 +17,13 @@ export interface Card {
   pct?: string;
   range?: string;
   purchase?: string;
+  certNumber?: string;
   _source?: string;
   _updatedAt?: string;
+  _psaVerified?: boolean;
+  _psaImageUrl?: string;
+  _psaPopulation?: number;
+  _psaPopHigher?: number;
 }
 
 /** The normalized schema returned by /api/alt-cards */
@@ -60,4 +65,57 @@ export interface AltApiResponse {
   cached: boolean;
   error?: string;
   configured?: boolean;
+}
+
+/** PSA API cert response */
+export interface PSACertResponse {
+  PSACert: {
+    CertNumber: string;
+    Year: string;
+    Brand: string;
+    Category: string;
+    CardNumber: string;
+    Subject: string;
+    Variety: string;
+    GradeDescription: string;
+    CardGrade: string;
+    AutographGrade: string;
+    SpecNumber: string;
+    SpecID: number;
+    LabelType: string;
+    TotalPopulation: number;
+    TotalPopulationWithQualifier: number;
+    PopulationHigher: number;
+    IsDualCert: boolean;
+    IsPSADNA: boolean;
+  };
+  DNACert: unknown;
+}
+
+/** Shape returned by GET /api/psa-cards */
+export interface PSAApiResponse {
+  cards: PSAEnrichedCard[];
+  source: string;
+  lastUpdated: string;
+  cached: boolean;
+  error?: string;
+  configured?: boolean;
+  quotaRemaining?: number;
+}
+
+export interface PSAEnrichedCard {
+  certNumber: string;
+  playerName: string;
+  year: string;
+  product: string;
+  grade: string;
+  cardNumber: string;
+  variety: string;
+  category: string;
+  population: number;
+  populationHigher: number;
+  imageUrl: string;
+  externalUrl: string;
+  verified: boolean;
+  lastUpdated: string;
 }
