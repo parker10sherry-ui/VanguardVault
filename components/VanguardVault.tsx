@@ -355,9 +355,17 @@ export default function VanguardVault() {
     if (side === "front") {
       setScanFrontFile(file);
       setScanFrontPreview(url);
+      // Auto-scan if back is already taken
+      if (scanBackFile) {
+        setTimeout(() => triggerScan(file, scanBackFile), 100);
+      }
     } else {
       setScanBackFile(file);
       setScanBackPreview(url);
+      // Auto-scan if front is already taken
+      if (scanFrontFile) {
+        setTimeout(() => triggerScan(scanFrontFile, file), 100);
+      }
     }
     setScanError(null);
   };
@@ -393,20 +401,15 @@ export default function VanguardVault() {
       img.src = url;
     });
 
-  const handleScanSubmit = async () => {
-    if (!scanFrontFile || !scanBackFile) {
-      setScanError("Please take photos of both the front and back of the card.");
-      return;
-    }
-
+  const triggerScan = async (front: File, back: File) => {
     setScanning(true);
     setScanError(null);
     setScanConfidence(null);
 
     try {
       const images = [
-        await fileToBase64(scanFrontFile),
-        await fileToBase64(scanBackFile),
+        await fileToBase64(front),
+        await fileToBase64(back),
       ];
 
       const res = await fetch("/api/scan-card", {
@@ -430,7 +433,7 @@ export default function VanguardVault() {
       if (card.team) setFormTeam(card.team);
       if (card.year) setFormYear(String(card.year));
       if (card.product) setFormProduct(card.product);
-      if (card.psaGrade) setFormPSA(String(card.psaGrade));
+      if (card.psaGrade != null) setFormPSA(String(card.psaGrade));
       if (card.certNumber) setFormCert(card.certNumber);
       setScanConfidence(card.confidence);
     } catch (err) {
@@ -439,6 +442,14 @@ export default function VanguardVault() {
     } finally {
       setScanning(false);
     }
+  };
+
+  const handleScanSubmit = async () => {
+    if (!scanFrontFile || !scanBackFile) {
+      setScanError("Please take photos of both the front and back of the card.");
+      return;
+    }
+    triggerScan(scanFrontFile, scanBackFile);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
