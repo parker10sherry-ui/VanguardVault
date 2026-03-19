@@ -33,6 +33,15 @@ export async function POST(request: Request) {
 
     const client = new Anthropic({ apiKey });
 
+    // Normalize media types — the API only accepts jpeg, png, gif, webp
+    const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
+    function normalizeMediaType(type: string): "image/jpeg" | "image/png" | "image/gif" | "image/webp" {
+      const lower = type.toLowerCase();
+      if (ALLOWED_TYPES.has(lower)) return lower as "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+      // HEIC, HEIF, or anything else from phone cameras → treat as jpeg
+      return "image/jpeg";
+    }
+
     // Build the content array with images + prompt
     const content: Anthropic.MessageCreateParams["messages"][0]["content"] = [];
 
@@ -41,7 +50,7 @@ export async function POST(request: Request) {
         type: "image",
         source: {
           type: "base64",
-          media_type: img.mediaType as "image/jpeg" | "image/png" | "image/gif" | "image/webp",
+          media_type: normalizeMediaType(img.mediaType),
           data: img.data,
         },
       });

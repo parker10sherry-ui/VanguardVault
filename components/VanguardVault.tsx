@@ -319,12 +319,35 @@ export default function VanguardVault() {
     setScanError(null);
   };
 
-  const fileToBase64 = (file: File): Promise<string> =>
+  const fileToBase64 = (file: File): Promise<{ data: string; mediaType: string }> =>
     new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve((reader.result as string).split(",")[1]);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
+      // Draw to canvas to convert any format (HEIC, etc.) to JPEG
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        // Limit size to 1600px max dimension to keep payload reasonable
+        const maxDim = 1600;
+        let w = img.width;
+        let h = img.height;
+        if (w > maxDim || h > maxDim) {
+          const scale = maxDim / Math.max(w, h);
+          w = Math.round(w * scale);
+          h = Math.round(h * scale);
+        }
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d")!;
+        ctx.drawImage(img, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+        URL.revokeObjectURL(url);
+        resolve({ data: dataUrl.split(",")[1], mediaType: "image/jpeg" });
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error("Failed to load image"));
+      };
+      img.src = url;
     });
 
   const handleScanSubmit = async () => {
@@ -339,8 +362,8 @@ export default function VanguardVault() {
 
     try {
       const images = [
-        { data: await fileToBase64(scanFrontFile), mediaType: scanFrontFile.type || "image/jpeg" },
-        { data: await fileToBase64(scanBackFile), mediaType: scanBackFile.type || "image/jpeg" },
+        await fileToBase64(scanFrontFile),
+        await fileToBase64(scanBackFile),
       ];
 
       const res = await fetch("/api/scan-card", {
