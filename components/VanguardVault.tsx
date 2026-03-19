@@ -123,6 +123,11 @@ export default function VanguardVault() {
   const [formCert, setFormCert] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  // --- Scan state ---
+  const [scanning, setScanning] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const [scanConfidence, setScanConfidence] = useState<string | null>(null);
+
   // --- Data loading ---
   const loadData = useCallback(async (providerKey: string) => {
     const provider = PROVIDERS[providerKey];
@@ -290,6 +295,63 @@ export default function VanguardVault() {
     setFormCert("");
     setFormYear("2025");
     setFormPSA("10");
+    setScanError(null);
+    setScanConfidence(null);
+  };
+
+  const handleScanCard = async (files: FileList) => {
+    setScanning(true);
+    setScanError(null);
+    setScanConfidence(null);
+
+    try {
+      // Convert files to base64
+      const images: { data: string; mediaType: string }[] = [];
+      for (let i = 0; i < Math.min(files.length, 4); i++) {
+        const file = files[i];
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const result = reader.result as string;
+            // Strip the data:image/...;base64, prefix
+            resolve(result.split(",")[1]);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+        images.push({ data: base64, mediaType: file.type || "image/jpeg" });
+      }
+
+      const res = await fetch("/api/scan-card", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ images }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        setScanError(data.error || "Scan failed");
+        setScanning(false);
+        return;
+      }
+
+      const card = data.card;
+
+      // Pre-fill form with scanned data
+      if (card.playerName) setFormFullName(card.playerName);
+      if (card.team) setFormTeam(card.team);
+      if (card.year) setFormYear(String(card.year));
+      if (card.product) setFormProduct(card.product);
+      if (card.psaGrade) setFormPSA(String(card.psaGrade));
+      if (card.certNumber) setFormCert(card.certNumber);
+      setScanConfidence(card.confidence);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Scan failed";
+      setScanError(message);
+    } finally {
+      setScanning(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -570,6 +632,38 @@ export default function VanguardVault() {
               &times;
             </button>
           </div>
+
+          {/* Scan Card Section */}
+          <div className="scan-section">
+            <label className="scan-btn" htmlFor="scan-input">
+              {scanning ? "Scanning..." : "Scan Card"}
+            </label>
+            <input
+              id="scan-input"
+              type="file"
+              accept="image/*"
+              capture="environment"
+              multiple
+              style={{ display: "none" }}
+              disabled={scanning}
+              onChange={(e) => {
+                if (e.target.files && e.target.files.length > 0) {
+                  handleScanCard(e.target.files);
+                  e.target.value = "";
+                }
+              }}
+            />
+            <span className="scan-hint">
+              Take a photo of front &amp; back to auto-fill
+            </span>
+            {scanError && <span className="scan-error">{scanError}</span>}
+            {scanConfidence && (
+              <span className={`scan-confidence scan-confidence-${scanConfidence}`}>
+                {scanConfidence} confidence
+              </span>
+            )}
+          </div>
+
           <form onSubmit={handleSubmit}>
             <div className="form-row">
               <div className="form-group">
