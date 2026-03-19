@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import type { Card, PlayerInfo, DataStatus, DataProvider } from "@/lib/types";
 import { LocalProvider, MockProvider, AltProvider, PSAProvider } from "@/lib/providers";
+import { updateCardAtIndex } from "@/lib/providers/localProvider";
 
 // ============================================================
 // Provider registry
@@ -109,6 +110,7 @@ export default function VanguardVault() {
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
 
   // --- Form state ---
   const [formFullName, setFormFullName] = useState("");
@@ -202,14 +204,18 @@ export default function VanguardVault() {
   }, []);
 
   // --- Filter + search ---
+  // Each entry tracks the card AND its original index in the cards array
+  type CardWithIndex = { card: Card; originalIndex: number };
   const { groups, order } = useMemo(() => {
-    let filtered = [...cards];
+    const indexed: CardWithIndex[] = cards.map((card, i) => ({ card, originalIndex: i }));
+    let filtered = indexed;
     if (filter !== "all") {
-      filtered = filtered.filter((c) => c.player === filter);
+      filtered = filtered.filter((ci) => ci.card.player === filter);
     }
     if (search) {
       const s = search.toLowerCase();
-      filtered = filtered.filter((c) => {
+      filtered = filtered.filter((ci) => {
+        const c = ci.card;
         const p = players[c.player];
         const full = p ? p.full.toLowerCase() : "";
         const team = p ? p.team.toLowerCase() : "";
@@ -222,14 +228,14 @@ export default function VanguardVault() {
         );
       });
     }
-    const g: Record<string, Card[]> = {};
+    const g: Record<string, CardWithIndex[]> = {};
     const o: string[] = [];
-    filtered.forEach((c) => {
-      if (!g[c.player]) {
-        g[c.player] = [];
-        o.push(c.player);
+    filtered.forEach((ci) => {
+      if (!g[ci.card.player]) {
+        g[ci.card.player] = [];
+        o.push(ci.card.player);
       }
-      g[c.player].push(c);
+      g[ci.card.player].push(ci);
     });
     return { groups: g, order: o };
   }, [cards, players, filter, search]);
@@ -299,12 +305,49 @@ export default function VanguardVault() {
     setFormCert("");
     setFormYear("2025");
     setFormPSA("10");
+    setEditingIndex(null);
     setScanError(null);
     setScanConfidence(null);
     setScanFrontFile(null);
     setScanBackFile(null);
     setScanFrontPreview(null);
     setScanBackPreview(null);
+  };
+
+  const handleEditCard = (cardIndex: number) => {
+    const card = cards[cardIndex];
+    if (!card) return;
+
+    const info = players[card.player];
+    setFormFullName(info ? info.full : card.player);
+    setFormTeam(info ? info.team : "");
+    setFormYear(String(card.year));
+    setFormProduct(card.product);
+    setFormPSA(String(card.psa));
+    setFormValue(String(card.value || ""));
+    setFormCert(card.certNumber || "");
+
+    // Parse pct into value and direction
+    if (card.pct) {
+      const clean = card.pct.replace(/\s/g, "");
+      if (clean.includes("U")) {
+        setFormPctDir("U");
+        setFormPct(clean.replace("U", "").trim());
+      } else if (clean.includes("D")) {
+        setFormPctDir("D");
+        setFormPct(clean.replace("D", "").trim());
+      } else {
+        setFormPctDir("");
+        setFormPct(clean);
+      }
+    } else {
+      setFormPct("");
+      setFormPctDir("");
+    }
+
+    setFormRange(card.range || "");
+    setEditingIndex(cardIndex);
+    setModalOpen(true);
   };
 
   const handleScanFile = (file: File, side: "front" | "back") => {
@@ -409,7 +452,7 @@ export default function VanguardVault() {
     const year = parseInt(formYear);
     const product = formProduct.trim();
     const psa = parseInt(formPSA);
-    const value = parseInt(formValue);
+    const value = parseInt(formValue) || 0;
     const pct = formPct.trim()
       ? `${formPct.trim()} ${formPctDir}`.trim()
       : "";
@@ -441,10 +484,20 @@ export default function VanguardVault() {
     const certNumber = formCert.trim() || undefined;
     const card: Card = { year, player: playerKey, product, psa, value, pct, range, certNumber };
 
-    await LocalProvider.saveCard(card, playerKey, newPlayerData);
+    if (editingIndex !== null) {
+      // --- EDIT MODE ---
+      updateCardAtIndex(editingIndex, card);
+      setCards((prev) => {
+        const updated = [...prev];
+        updated[editingIndex] = card;
+        return updated;
+      });
+    } else {
+      // --- ADD MODE ---
+      await LocalProvider.saveCard(card, playerKey, newPlayerData);
+      setCards((prev) => [...prev, card]);
+    }
 
-    // Update state
-    setCards((prev) => [...prev, card]);
     if (newPlayerData) {
       setPlayers((prev) => ({ ...prev, [playerKey!]: newPlayerData! }));
     }
@@ -559,7 +612,7 @@ export default function VanguardVault() {
               info.full
             )}&background=1e293b&color=d4a843&size=120&bold=true&font-size=0.4`;
             const totalValue = playerCards.reduce(
-              (sum, c) => sum + (c.value || 0),
+              (sum, ci) => sum + (ci.card.value || 0),
               0
             );
 
@@ -626,13 +679,18 @@ export default function VanguardVault() {
                     </tr>
                   </thead>
                   <tbody>
-                    {playerCards.map((c, i) => {
+                    {playerCards.map((ci, i) => {
+                      const c = ci.card;
                       const pct = parsePct(c.pct || "");
                       return (
-                        <tr key={`${c.player}-${c.product}-${c.psa}-${i}`}>
+                        <tr
+                          key={`${c.player}-${c.product}-${c.psa}-${i}`}
+                          className="card-row-clickable"
+                          onClick={() => handleEditCard(ci.originalIndex)}
+                        >
                           <td className="year">{c.year}</td>
                           <td className="product">{c.product || "\u2014"}</td>
-                          <td className={`psa psa-${c.psa}`}>{c.psa}</td>
+                          <td className={`psa psa-${c.psa}`}>{c.psa === 0 ? "Raw" : c.psa}</td>
                           <td className="value">${c.value}</td>
                           <td
                             className={`pct ${
@@ -668,7 +726,7 @@ export default function VanguardVault() {
       >
         <div className="modal">
           <div className="modal-header">
-            <h3>Add New Card</h3>
+            <h3>{editingIndex !== null ? "Edit Card" : "Add New Card"}</h3>
             <button
               className="modal-close"
               onClick={() => setModalOpen(false)}
@@ -809,6 +867,7 @@ export default function VanguardVault() {
                   <option value="8">PSA 8</option>
                   <option value="7">PSA 7</option>
                   <option value="6">PSA 6</option>
+                  <option value="0">Raw</option>
                 </select>
               </div>
             </div>
@@ -868,7 +927,7 @@ export default function VanguardVault() {
               className="form-submit"
               disabled={submitting}
             >
-              {submitting ? "Looking up player..." : "Add Card"}
+              {submitting ? "Saving..." : editingIndex !== null ? "Save Changes" : "Add Card"}
             </button>
           </form>
         </div>
