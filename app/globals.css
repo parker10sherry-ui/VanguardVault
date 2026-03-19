@@ -1513,3 +1513,243 @@ main {
     background: var(--accent-red);
     color: white;
 }
+
+/* ============================================================ */
+/* PORTFOLIO CHART                                              */
+/* ============================================================ */
+.pro-chart-section {
+    padding: 1rem 2rem;
+    border-bottom: 1px solid var(--border);
+}
+.pro-chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+.pro-chart-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-secondary);
+}
+.csv-export-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 0.35rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.csv-export-btn:hover {
+    border-color: var(--accent-gold);
+    color: var(--accent-gold);
+}
+.pro-chart-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+.chart-bar-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+.chart-bar-label {
+    width: 120px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-shrink: 0;
+}
+.chart-bar-track {
+    flex: 1;
+    height: 18px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 4px;
+    overflow: hidden;
+}
+.chart-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-gold), #f0c96e);
+    border-radius: 4px;
+    transition: width 0.5s ease;
+}
+.chart-bar-value {
+    width: 70px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--accent-gold);
+    text-align: right;
+    flex-shrink: 0;
+}
+
+/* ============================================================ */
+/* WATCHLIST                                                     */
+/* ============================================================ */
+.watchlist-section {
+    padding: 1.5rem 2rem;
+    padding-bottom: 5rem;
+}
+.watchlist-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+.watchlist-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+.watchlist-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+.watchlist-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.85rem 1rem;
+    transition: border-color 0.2s;
+}
+.watchlist-card:hover {
+    border-color: var(--accent-gold);
+}
+.watchlist-card-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+.watchlist-card-player {
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+}
+.watchlist-card-product {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+.watchlist-card-meta {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+.watchlist-card-notes {
+    font-size: 0.7rem;
+    color: var(--accent-gold);
+    font-style: italic;
+    margin-top: 0.1rem;
+}
+.watchlist-remove {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+.watchlist-remove:hover {
+    color: var(--accent-red);
+    background: rgba(239, 68, 68, 0.1);
+}
+.watch-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+/* ============================================================ */
+/* PRO MOBILE BOTTOM NAV                                        */
+/* ============================================================ */
+.pro-bottom-nav {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .pro-bottom-nav {
+        display: flex;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: var(--header-bg);
+        border-top: 1px solid var(--border);
+        z-index: 5000;
+        padding: 0.4rem 0;
+        padding-bottom: env(safe-area-inset-bottom, 0.4rem);
+    }
+    .bottom-nav-btn {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.15rem;
+        background: none;
+        border: none;
+        color: var(--text-muted);
+        cursor: pointer;
+        padding: 0.3rem 0;
+        transition: color 0.2s;
+    }
+    .bottom-nav-btn.active {
+        color: var(--accent-gold);
+    }
+    .bottom-nav-icon {
+        font-size: 1.3rem;
+        line-height: 1;
+    }
+    .bottom-nav-scan {
+        font-size: 1.6rem;
+        color: var(--accent-gold);
+    }
+    .bottom-nav-label {
+        font-size: 0.6rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    /* Add bottom padding to main content so it doesn't get hidden behind nav */
+    main {
+        padding-bottom: 4.5rem;
+    }
+    .watchlist-section {
+        padding-bottom: 5rem;
+    }
+    .toast {
+        bottom: 5rem;
+    }
+
+    .pro-chart-section {
+        padding: 0.75rem 1rem;
+    }
+    .chart-bar-label {
+        width: 80px;
+        font-size: 0.65rem;
+    }
+    .chart-bar-value {
+        width: 55px;
+        font-size: 0.65rem;
+    }
+
+    .watchlist-section {
+        padding: 1rem;
+    }
+}

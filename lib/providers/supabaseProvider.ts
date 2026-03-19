@@ -122,6 +122,7 @@ export const SupabaseProvider: DataProvider = {
         value: card.value || 0,
         pct: card.pct || "",
         range: card.range || "",
+        purchase: card.purchase || "",
         cert_number: card.certNumber || null,
         front_image_url: card.frontImageUrl || null,
         back_image_url: card.backImageUrl || null,

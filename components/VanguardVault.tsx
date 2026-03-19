@@ -123,6 +123,22 @@ export default function VanguardVault() {
   const [gridView, setGridView] = useState(false);
   const [proModalEdit, setProModalEdit] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [proTab, setProTab] = useState<"portfolio" | "scan" | "watchlist">("portfolio");
+
+  // --- Watchlist state ---
+  const [watchlist, setWatchlist] = useState<{ player: string; year: number; product: string; psa: number; targetPrice: number; notes: string }[]>(() => {
+    if (typeof window !== "undefined") {
+      try { return JSON.parse(localStorage.getItem("vv_watchlist") || "[]"); } catch { return []; }
+    }
+    return [];
+  });
+  const [watchModalOpen, setWatchModalOpen] = useState(false);
+  const [watchPlayer, setWatchPlayer] = useState("");
+  const [watchYear, setWatchYear] = useState("2025");
+  const [watchProduct, setWatchProduct] = useState("");
+  const [watchPSA, setWatchPSA] = useState("10");
+  const [watchTarget, setWatchTarget] = useState("");
+  const [watchNotes, setWatchNotes] = useState("");
 
   // --- Form state ---
   const [formFullName, setFormFullName] = useState("");
@@ -135,6 +151,7 @@ export default function VanguardVault() {
   const [formPctDir, setFormPctDir] = useState("");
   const [formRange, setFormRange] = useState("");
   const [formCert, setFormCert] = useState("");
+  const [formPurchase, setFormPurchase] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   // --- Sell state ---
@@ -446,6 +463,93 @@ export default function VanguardVault() {
     return sorted;
   }, [cards, players, filter, search, sortBy, sortDir]);
 
+  // Portfolio breakdown by player (for chart)
+  const portfolioBreakdown = useMemo(() => {
+    const active = cards.filter((c) => !c.soldAt);
+    const byPlayer: { name: string; value: number; costBasis: number }[] = [];
+    const playerTotals: Record<string, { value: number; costBasis: number }> = {};
+
+    active.forEach((c) => {
+      if (!playerTotals[c.player]) playerTotals[c.player] = { value: 0, costBasis: 0 };
+      playerTotals[c.player].value += c.value || 0;
+      playerTotals[c.player].costBasis += parseInt(c.purchase || "0") || 0;
+    });
+
+    for (const [key, totals] of Object.entries(playerTotals)) {
+      const info = players[key];
+      byPlayer.push({ name: info?.full || key, ...totals });
+    }
+
+    byPlayer.sort((a, b) => b.value - a.value);
+    const totalCostBasis = active.reduce((sum, c) => sum + (parseInt(c.purchase || "0") || 0), 0);
+    const totalValue = active.reduce((sum, c) => sum + (c.value || 0), 0);
+    const unrealizedPL = totalValue - totalCostBasis;
+
+    return { byPlayer, totalCostBasis, totalValue, unrealizedPL };
+  }, [cards, players]);
+
+  // CSV export
+  const handleExportCSV = useCallback(() => {
+    const active = cards.filter((c) => !c.soldAt);
+    const headers = ["Player", "Team", "Year", "Product", "PSA Grade", "Value", "Cost Basis", "% Change", "6-Mo Range", "Cert #"];
+    const rows = active.map((c) => {
+      const info = players[c.player];
+      return [
+        info?.full || c.player,
+        info?.team || "",
+        c.year,
+        c.product,
+        c.psa === 0 ? "Raw" : c.psa,
+        c.value || 0,
+        c.purchase || "",
+        c.pct || "",
+        c.range || "",
+        c.certNumber || "",
+      ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",");
+    });
+
+    const csv = [headers.join(","), ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `vanguard-vault-${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast("Collection exported");
+  }, [cards, players, showToast]);
+
+  // Watchlist handlers
+  const handleAddWatchlist = () => {
+    if (!watchPlayer.trim() || !watchProduct.trim()) return;
+    const item = {
+      player: watchPlayer.trim(),
+      year: parseInt(watchYear),
+      product: watchProduct.trim(),
+      psa: parseInt(watchPSA),
+      targetPrice: parseFloat(watchTarget) || 0,
+      notes: watchNotes.trim(),
+    };
+    const updated = [...watchlist, item];
+    setWatchlist(updated);
+    localStorage.setItem("vv_watchlist", JSON.stringify(updated));
+    setWatchModalOpen(false);
+    setWatchPlayer("");
+    setWatchYear("2025");
+    setWatchProduct("");
+    setWatchPSA("10");
+    setWatchTarget("");
+    setWatchNotes("");
+    showToast("Added to watchlist");
+  };
+
+  const handleRemoveWatchlist = (index: number) => {
+    const updated = watchlist.filter((_, i) => i !== index);
+    setWatchlist(updated);
+    localStorage.setItem("vv_watchlist", JSON.stringify(updated));
+    showToast("Removed from watchlist");
+  };
+
   const handleProviderChange = async (key: string) => {
     setActiveProvider(key);
     setFilter("all");
@@ -484,6 +588,7 @@ export default function VanguardVault() {
     setFormPctDir("");
     setFormRange("");
     setFormCert("");
+    setFormPurchase("");
     setFormYear("2025");
     setFormPSA("10");
     setEditingIndex(null);
@@ -535,6 +640,7 @@ export default function VanguardVault() {
     }
 
     setFormRange(card.range || "");
+    setFormPurchase(card.purchase || "");
     setEditingIndex(cardIndex);
     setModalOpen(true);
 
@@ -850,8 +956,9 @@ export default function VanguardVault() {
     }
 
     const certNumber = formCert.trim() || undefined;
+    const purchase = formPurchase.trim() || "";
     const card: Card = {
-      year, player: playerKey, product, psa, value, pct, range, certNumber,
+      year, player: playerKey, product, psa, value, pct, range, certNumber, purchase,
       frontImageUrl: croppedFrontUrl || undefined,
       backImageUrl: croppedBackUrl || undefined,
     };
@@ -1115,7 +1222,7 @@ export default function VanguardVault() {
       {/* ============================================================ */}
       {/* PRO VIEW — Dashboard, Top Movers, Sorted Grid/Table          */}
       {/* ============================================================ */}
-      {proView && !status.loading && (
+      {proView && !status.loading && proTab === "portfolio" && (
         <>
           {/* PORTFOLIO DASHBOARD */}
           <div className="pro-dashboard">
@@ -1127,6 +1234,20 @@ export default function VanguardVault() {
               <span className="dash-label">Active Cards</span>
               <span className="dash-value">{dashboardStats.totalCards}</span>
             </div>
+            {portfolioBreakdown.totalCostBasis > 0 && (
+              <div className="dash-card">
+                <span className="dash-label">Cost Basis</span>
+                <span className="dash-value">${portfolioBreakdown.totalCostBasis.toLocaleString()}</span>
+              </div>
+            )}
+            {portfolioBreakdown.totalCostBasis > 0 && (
+              <div className="dash-card">
+                <span className="dash-label">Unrealized P/L</span>
+                <span className={`dash-value ${portfolioBreakdown.unrealizedPL >= 0 ? "profit-positive" : "profit-negative"}`}>
+                  {portfolioBreakdown.unrealizedPL >= 0 ? "+" : ""}${portfolioBreakdown.unrealizedPL.toLocaleString()}
+                </span>
+              </div>
+            )}
             <div className="dash-card">
               <span className="dash-label">Realized P/L</span>
               <span className={`dash-value ${dashboardStats.realizedProfit >= 0 ? "profit-positive" : "profit-negative"}`}>
@@ -1196,11 +1317,34 @@ export default function VanguardVault() {
               )}
             </div>
           )}
+          {/* PORTFOLIO CHART — value by player */}
+          {portfolioBreakdown.byPlayer.length > 0 && (
+            <div className="pro-chart-section">
+              <div className="pro-chart-header">
+                <h3 className="pro-chart-title">Portfolio Breakdown</h3>
+                <button className="csv-export-btn" onClick={handleExportCSV}>Export CSV</button>
+              </div>
+              <div className="pro-chart-bars">
+                {portfolioBreakdown.byPlayer.slice(0, 8).map((p) => {
+                  const pct = portfolioBreakdown.totalValue > 0 ? (p.value / portfolioBreakdown.totalValue) * 100 : 0;
+                  return (
+                    <div key={p.name} className="chart-bar-row">
+                      <span className="chart-bar-label">{p.name}</span>
+                      <div className="chart-bar-track">
+                        <div className="chart-bar-fill" style={{ width: `${Math.max(pct, 2)}%` }} />
+                      </div>
+                      <span className="chart-bar-value">${p.value.toLocaleString()}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </>
       )}
 
-      {/* MAIN CONTENT */}
-      <main>
+      {/* MAIN CONTENT — hidden when Pro watchlist tab is active */}
+      <main style={proView && proTab === "watchlist" ? { display: "none" } : undefined}>
         {status.loading ? (
           proView ? (
             /* PRO SKELETON LOADING */
@@ -1868,6 +2012,20 @@ export default function VanguardVault() {
                 />
               </div>
             </div>
+            {proView && (
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Purchase Price ($)</label>
+                  <input
+                    type="number"
+                    placeholder="What you paid"
+                    value={formPurchase}
+                    onChange={(e) => setFormPurchase(e.target.value)}
+                    min="0"
+                  />
+                </div>
+              </div>
+            )}
             <button
               type="submit"
               className="form-submit"
@@ -1972,6 +2130,103 @@ export default function VanguardVault() {
           {/* TOAST NOTIFICATION */}
         </div>
       </div>
+
+      {/* WATCHLIST MODAL */}
+      {watchModalOpen && (
+        <div className="modal-overlay active" onClick={(e) => { if (e.target === e.currentTarget) setWatchModalOpen(false); }}>
+          <div className="modal">
+            <div className="modal-header">
+              <h3>Add to Watchlist</h3>
+              <button className="modal-close" onClick={() => setWatchModalOpen(false)}>&times;</button>
+            </div>
+            <div className="watch-form">
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Player Name</label>
+                  <input type="text" placeholder="e.g. Patrick Mahomes" value={watchPlayer} onChange={(e) => setWatchPlayer(e.target.value)} />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group year-group">
+                  <label>Year</label>
+                  <input type="number" value={watchYear} onChange={(e) => setWatchYear(e.target.value)} />
+                </div>
+                <div className="form-group">
+                  <label>Product</label>
+                  <input type="text" placeholder="e.g. Prizm Silver" value={watchProduct} onChange={(e) => setWatchProduct(e.target.value)} />
+                </div>
+                <div className="form-group year-group">
+                  <label>PSA</label>
+                  <select value={watchPSA} onChange={(e) => setWatchPSA(e.target.value)}>
+                    <option value="10">10</option><option value="9">9</option><option value="8">8</option><option value="0">Raw</option>
+                  </select>
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Target Price ($)</label>
+                  <input type="number" placeholder="Max you'd pay" value={watchTarget} onChange={(e) => setWatchTarget(e.target.value)} min="0" />
+                </div>
+                <div className="form-group">
+                  <label>Notes</label>
+                  <input type="text" placeholder="Optional notes" value={watchNotes} onChange={(e) => setWatchNotes(e.target.value)} />
+                </div>
+              </div>
+              <button className="form-submit" onClick={handleAddWatchlist} disabled={!watchPlayer.trim() || !watchProduct.trim()}>
+                Add to Watchlist
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* WATCHLIST SECTION (Pro view, watchlist tab) */}
+      {proView && proTab === "watchlist" && (
+        <div className="watchlist-section">
+          <div className="watchlist-header">
+            <h2 className="watchlist-title">Watchlist</h2>
+            <button className="add-card-btn" onClick={() => setWatchModalOpen(true)}>+ Add</button>
+          </div>
+          {watchlist.length === 0 ? (
+            <div className="no-results">No cards on your watchlist yet.</div>
+          ) : (
+            <div className="watchlist-grid">
+              {watchlist.map((item, i) => (
+                <div key={i} className="watchlist-card">
+                  <div className="watchlist-card-info">
+                    <span className="watchlist-card-player">{item.player}</span>
+                    <span className="watchlist-card-product">{item.year} {item.product}</span>
+                    <span className="watchlist-card-meta">
+                      {item.psa === 0 ? "Raw" : `PSA ${item.psa}`}
+                      {item.targetPrice > 0 && ` | Target: $${item.targetPrice}`}
+                    </span>
+                    {item.notes && <span className="watchlist-card-notes">{item.notes}</span>}
+                  </div>
+                  <button className="watchlist-remove" onClick={() => handleRemoveWatchlist(i)} title="Remove">&times;</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* PRO MOBILE BOTTOM NAV */}
+      {proView && (
+        <nav className="pro-bottom-nav">
+          <button className={`bottom-nav-btn ${proTab === "portfolio" ? "active" : ""}`} onClick={() => setProTab("portfolio")}>
+            <span className="bottom-nav-icon">&#9733;</span>
+            <span className="bottom-nav-label">Portfolio</span>
+          </button>
+          <button className="bottom-nav-btn" onClick={() => { setProTab("portfolio"); setModalOpen(true); }}>
+            <span className="bottom-nav-icon bottom-nav-scan">&#9211;</span>
+            <span className="bottom-nav-label">Scan</span>
+          </button>
+          <button className={`bottom-nav-btn ${proTab === "watchlist" ? "active" : ""}`} onClick={() => setProTab("watchlist")}>
+            <span className="bottom-nav-icon">&#9788;</span>
+            <span className="bottom-nav-label">Watchlist</span>
+          </button>
+        </nav>
+      )}
 
       {/* Toast */}
       {toast && (
