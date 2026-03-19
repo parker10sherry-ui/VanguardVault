@@ -993,7 +993,7 @@ export default function VanguardVault() {
     setModalOpen(false);
     resetForm();
     setSubmitting(false);
-    if (proView) showToast(wasEditing ? "Card updated" : "Card added");
+    showToast(wasEditing ? "Card updated" : "Card added");
   };
 
   const handleSellCard = async () => {
@@ -1023,7 +1023,7 @@ export default function VanguardVault() {
     setModalOpen(false);
     resetForm();
     setSubmitting(false);
-    if (proView) showToast("Card sold");
+    showToast("Card sold");
   };
 
   const handleUnsellCard = async () => {
@@ -1052,7 +1052,7 @@ export default function VanguardVault() {
     setModalOpen(false);
     resetForm();
     setSubmitting(false);
-    if (proView) showToast("Sale reversed");
+    showToast("Sale reversed");
   };
 
   // ============================================================
@@ -1209,6 +1209,7 @@ export default function VanguardVault() {
             <option value="mock">Mock (Sim)</option>
             <option value="psa">PSA Verified</option>
           </select>
+          <button className="csv-export-btn" onClick={handleExportCSV} title="Export CSV">CSV</button>
           <button
             className={`refresh-btn ${status.loading ? "spinning" : ""}`}
             onClick={handleRefresh}
@@ -1651,7 +1652,7 @@ export default function VanguardVault() {
           if (e.target === e.currentTarget) setModalOpen(false);
         }}
       >
-        <div className={`modal ${proView && editingIndex !== null ? "pro-modal" : ""}`}>
+        <div className={`modal ${editingIndex !== null ? "pro-modal" : ""}`}>
           <div className="modal-header">
             <h3>{editingIndex !== null ? (cards[editingIndex]?.soldAt ? "Sold Card" : "Edit Card") : "Add New Card"}</h3>
             <button
@@ -1665,7 +1666,7 @@ export default function VanguardVault() {
           {/* ============================================================ */}
           {/* PRO DETAIL VIEW — shows card details first, edit as secondary */}
           {/* ============================================================ */}
-          {proView && editingIndex !== null && !proModalEdit && (() => {
+          {editingIndex !== null && !proModalEdit && (() => {
             const detailCard = cards[editingIndex];
             const detailInfo = players[detailCard?.player] || { full: detailCard?.player, team: "" };
             const detailPct = parsePct(detailCard?.pct || "");
@@ -1777,10 +1778,10 @@ export default function VanguardVault() {
           {/* ============================================================ */}
           {/* CLASSIC MODAL / PRO EDIT MODE — form view                    */}
           {/* ============================================================ */}
-          {(!proView || editingIndex === null || proModalEdit) && (
+          {(editingIndex === null || proModalEdit) && (
           <>
-          {/* Back to detail button (pro edit mode) */}
-          {proView && proModalEdit && editingIndex !== null && (
+          {/* Back to detail button (edit mode) */}
+          {proModalEdit && editingIndex !== null && (
             <button className="pro-back-btn" onClick={() => setProModalEdit(false)}>&larr; Back to Details</button>
           )}
 
@@ -2014,8 +2015,7 @@ export default function VanguardVault() {
                 />
               </div>
             </div>
-            {proView && (
-              <div className="form-row">
+            <div className="form-row">
                 <div className="form-group">
                   <label>Purchase Price ($)</label>
                   <input
@@ -2027,7 +2027,6 @@ export default function VanguardVault() {
                   />
                 </div>
               </div>
-            )}
             <button
               type="submit"
               className="form-submit"
