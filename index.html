@@ -15,15 +15,9 @@
             <p class="subtitle">Sherry's Trading Cards</p>
         </div>
         <div class="header-right">
+            <button class="add-card-btn" id="addCardBtn">+ Add Card</button>
             <div class="search-box">
                 <input type="text" id="searchInput" placeholder="Search players, cards...">
-            </div>
-            <div class="toggle-container" id="privateToggle">
-                <label class="toggle-label">Purchase Info</label>
-                <label class="switch">
-                    <input type="checkbox" id="toggleH">
-                    <span class="slider"></span>
-                </label>
             </div>
         </div>
     </header>
@@ -33,6 +27,79 @@
     </nav>
 
     <main id="cardGrid"></main>
+
+    <!-- Add Card Modal -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Add New Card</h3>
+                <button class="modal-close" id="modalClose">&times;</button>
+            </div>
+            <form id="addCardForm">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Player</label>
+                        <input type="text" id="formPlayer" list="playerList" placeholder="e.g. S. Sanders" required>
+                        <datalist id="playerList"></datalist>
+                    </div>
+                    <div class="form-group">
+                        <label>Full Name</label>
+                        <input type="text" id="formFullName" placeholder="e.g. Shedeur Sanders">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Team</label>
+                        <input type="text" id="formTeam" placeholder="e.g. Cleveland Browns">
+                    </div>
+                    <div class="form-group">
+                        <label>Year</label>
+                        <input type="number" id="formYear" value="2025" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Product</label>
+                        <input type="text" id="formProduct" placeholder="e.g. Mosaic Green" required>
+                    </div>
+                    <div class="form-group">
+                        <label>PSA Grade</label>
+                        <select id="formPSA" required>
+                            <option value="10">PSA 10</option>
+                            <option value="9">PSA 9</option>
+                            <option value="8">PSA 8</option>
+                            <option value="7">PSA 7</option>
+                            <option value="6">PSA 6</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Value ($)</label>
+                        <input type="number" id="formValue" placeholder="0" required>
+                    </div>
+                    <div class="form-group">
+                        <label>% Change</label>
+                        <div class="pct-input-group">
+                            <input type="text" id="formPct" placeholder="e.g. 15%">
+                            <select id="formPctDir">
+                                <option value="">—</option>
+                                <option value="U">Up</option>
+                                <option value="D">Down</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group full-width">
+                        <label>6-Month Range</label>
+                        <input type="text" id="formRange" placeholder="e.g. 45-108">
+                    </div>
+                </div>
+                <button type="submit" class="form-submit">Add Card</button>
+            </form>
+        </div>
+    </div>
 
     <script src="data.js"></script>
     <script src="app.js"></script>

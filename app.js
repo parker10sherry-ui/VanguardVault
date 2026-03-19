@@ -1,8 +1,43 @@
 // === DOM REFS ===
 const grid = document.getElementById("cardGrid");
-const toggleH = document.getElementById("toggleH");
 const searchInput = document.getElementById("searchInput");
 const filterBar = document.querySelector(".filter-bar");
+const addCardBtn = document.getElementById("addCardBtn");
+const modalOverlay = document.getElementById("modalOverlay");
+const modalClose = document.getElementById("modalClose");
+const addCardForm = document.getElementById("addCardForm");
+
+// === LOAD USER-ADDED CARDS FROM LOCALSTORAGE ===
+function loadUserCards() {
+    try {
+        const saved = localStorage.getItem("vanguardVault_userCards");
+        if (saved) {
+            const userCards = JSON.parse(saved);
+            userCards.forEach(c => CARDS.push(c));
+        }
+        const savedPlayers = localStorage.getItem("vanguardVault_userPlayers");
+        if (savedPlayers) {
+            const userPlayers = JSON.parse(savedPlayers);
+            Object.assign(PLAYERS, userPlayers);
+        }
+    } catch (e) { /* ignore parse errors */ }
+}
+
+function saveUserCard(card, playerKey, playerData) {
+    try {
+        const saved = localStorage.getItem("vanguardVault_userCards");
+        const userCards = saved ? JSON.parse(saved) : [];
+        userCards.push(card);
+        localStorage.setItem("vanguardVault_userCards", JSON.stringify(userCards));
+
+        if (playerData) {
+            const savedPlayers = localStorage.getItem("vanguardVault_userPlayers");
+            const userPlayers = savedPlayers ? JSON.parse(savedPlayers) : {};
+            userPlayers[playerKey] = playerData;
+            localStorage.setItem("vanguardVault_userPlayers", JSON.stringify(userPlayers));
+        }
+    } catch (e) { /* ignore storage errors */ }
+}
 
 // === GROUP CARDS BY PLAYER ===
 function groupByPlayer(cards) {
@@ -30,17 +65,9 @@ function parsePct(pct) {
     return { dir, num, display: `${arrow} ${clean.replace("U","").replace("D","").trim()}` };
 }
 
-// === FORMAT PURCHASE INFO ===
-function formatPurchase(raw) {
-    if (!raw) return "";
-    // Highlight tags: A, BN, BO, FP, BD
-    let html = raw
-        .replace(/\bA\b/g, '<span class="purchase-tag tag-A">A</span>')
-        .replace(/\bBN\b/g, '<span class="purchase-tag tag-BN">BN</span>')
-        .replace(/\bBO\b/g, '<span class="purchase-tag tag-BO">BO</span>')
-        .replace(/\bFP\b/g, '<span class="purchase-tag tag-FP">FP</span>')
-        .replace(/\bBD\b/g, '<span class="purchase-tag tag-BD">BD</span>');
-    return html;
+// === GET PLAYER INITIALS FOR FALLBACK ===
+function getInitials(fullName) {
+    return fullName.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase();
 }
 
 // === RENDER ===
@@ -78,13 +105,18 @@ function render(filter = "all", search = "") {
         const cards = groups[playerKey];
         const info = PLAYERS[playerKey] || { full: playerKey, team: "" };
         const imgUrl = getPlayerImage(playerKey);
+        const fallbackUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(info.full)}&background=1e293b&color=d4a843&size=120&bold=true&font-size=0.4`;
 
         // Calculate total value for this player
         const totalValue = cards.reduce((sum, c) => sum + (c.value || 0), 0);
 
         html += `<section class="player-section" data-player="${playerKey}">`;
         html += `<div class="player-header">`;
-        html += `<img class="player-photo" src="${imgUrl}" alt="${info.full}" loading="lazy">`;
+        if (imgUrl) {
+            html += `<img class="player-photo" src="${imgUrl}" alt="${info.full}" loading="lazy" onerror="this.onerror=null;this.src='${fallbackUrl}'">`;
+        } else {
+            html += `<img class="player-photo" src="${fallbackUrl}" alt="${info.full}" loading="lazy">`;
+        }
         html += `<div class="player-info">`;
         html += `<h2>${info.full}</h2>`;
         html += `<span class="team">${info.team}</span>`;
@@ -103,7 +135,6 @@ function render(filter = "all", search = "") {
             <th>Alt Value</th>
             <th>Alt %</th>
             <th>6-Mo Range</th>
-            <th class="col-h">Purchase Info</th>
         </tr></thead>`;
         html += `<tbody>`;
 
@@ -117,7 +148,6 @@ function render(filter = "all", search = "") {
             html += `<td class="value">$${c.value}</td>`;
             html += `<td class="pct ${pct.dir === 'up' ? 'pct-up' : pct.dir === 'down' ? 'pct-down' : ''}">${pct.display}</td>`;
             html += `<td class="range">${c.range ? "$" + c.range : "—"}</td>`;
-            html += `<td class="col-h">${formatPurchase(c.purchase) || "—"}</td>`;
             html += `</tr>`;
         });
 
@@ -149,11 +179,96 @@ function buildFilters() {
     });
 }
 
-// === EVENT LISTENERS ===
-toggleH.addEventListener("change", () => {
-    document.body.classList.toggle("show-h", toggleH.checked);
+// === POPULATE PLAYER DATALIST ===
+function populatePlayerList() {
+    const datalist = document.getElementById("playerList");
+    datalist.innerHTML = "";
+    const seen = new Set();
+    CARDS.forEach(c => {
+        if (!seen.has(c.player)) {
+            seen.add(c.player);
+            const opt = document.createElement("option");
+            opt.value = c.player;
+            const info = PLAYERS[c.player];
+            if (info) opt.label = info.full;
+            datalist.appendChild(opt);
+        }
+    });
+}
+
+// === MODAL LOGIC ===
+addCardBtn.addEventListener("click", () => {
+    populatePlayerList();
+    // Auto-fill full name and team when selecting existing player
+    const playerInput = document.getElementById("formPlayer");
+    playerInput.value = "";
+    document.getElementById("formFullName").value = "";
+    document.getElementById("formTeam").value = "";
+    document.getElementById("formProduct").value = "";
+    document.getElementById("formValue").value = "";
+    document.getElementById("formPct").value = "";
+    document.getElementById("formPctDir").value = "";
+    document.getElementById("formRange").value = "";
+    modalOverlay.classList.add("active");
 });
 
+modalClose.addEventListener("click", () => {
+    modalOverlay.classList.remove("active");
+});
+
+modalOverlay.addEventListener("click", (e) => {
+    if (e.target === modalOverlay) modalOverlay.classList.remove("active");
+});
+
+// Auto-fill player details when selecting from datalist
+document.getElementById("formPlayer").addEventListener("input", function() {
+    const info = PLAYERS[this.value];
+    if (info) {
+        document.getElementById("formFullName").value = info.full;
+        document.getElementById("formTeam").value = info.team;
+    }
+});
+
+// === FORM SUBMISSION ===
+addCardForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+
+    const playerKey = document.getElementById("formPlayer").value.trim();
+    const fullName = document.getElementById("formFullName").value.trim();
+    const team = document.getElementById("formTeam").value.trim();
+    const year = parseInt(document.getElementById("formYear").value);
+    const product = document.getElementById("formProduct").value.trim();
+    const psa = parseInt(document.getElementById("formPSA").value);
+    const value = parseInt(document.getElementById("formValue").value);
+    const pctVal = document.getElementById("formPct").value.trim();
+    const pctDir = document.getElementById("formPctDir").value;
+    const range = document.getElementById("formRange").value.trim();
+
+    const pct = pctVal ? `${pctVal} ${pctDir}`.trim() : "";
+
+    const card = { year, player: playerKey, product, psa, value, pct, range };
+
+    // If this is a new player, add to PLAYERS
+    let newPlayerData = null;
+    if (!PLAYERS[playerKey] && fullName) {
+        newPlayerData = { full: fullName, team: team || "Unknown" };
+        PLAYERS[playerKey] = newPlayerData;
+    }
+
+    CARDS.push(card);
+    saveUserCard(card, playerKey, newPlayerData);
+
+    // Close modal and re-render
+    modalOverlay.classList.remove("active");
+
+    // Rebuild filters in case new player was added
+    filterBar.innerHTML = '<button class="filter-btn active" data-filter="all">All Players</button>';
+    buildFilters();
+
+    render("all", searchInput.value);
+});
+
+// === EVENT LISTENERS ===
 filterBar.addEventListener("click", e => {
     if (!e.target.classList.contains("filter-btn")) return;
     filterBar.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
@@ -163,12 +278,12 @@ filterBar.addEventListener("click", e => {
 });
 
 searchInput.addEventListener("input", () => {
-    // Reset filter to "all" when searching
     filterBar.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
     filterBar.querySelector('[data-filter="all"]').classList.add("active");
     render("all", searchInput.value);
 });
 
 // === INIT ===
+loadUserCards();
 buildFilters();
 render();
