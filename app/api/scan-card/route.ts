@@ -70,7 +70,9 @@ Return ONLY a JSON object with these fields (use null for anything you can't det
   "psaGrade": 10,
   "certNumber": "PSA cert number from the label (e.g. 12345678)",
   "cardNumber": "Card number if visible (e.g. 151)",
-  "confidence": "high" | "medium" | "low"
+  "confidence": "high" | "medium" | "low",
+  "frontBoundingBox": { "x": 0.1, "y": 0.05, "width": 0.8, "height": 0.9 },
+  "backBoundingBox": { "x": 0.1, "y": 0.05, "width": 0.8, "height": 0.9 }
 }
 
 Important:
@@ -78,12 +80,13 @@ Important:
 - For "year", use the card year, not the season year
 - Read the PSA label carefully for cert number and grade
 - If there's no PSA slab, set psaGrade and certNumber to null
+- For "frontBoundingBox" and "backBoundingBox": identify the card/slab in each image. Return the bounding box as PERCENTAGES (0.0 to 1.0) of the image dimensions. x=left edge, y=top edge, width and height as fractions. The first image is the front, the second is the back. If only one image, set backBoundingBox to null. Be precise — tightly crop to the card/slab edges.
 - Return ONLY the JSON, no markdown, no explanation`,
     });
 
     const response = await client.messages.create({
       model: "claude-sonnet-4-20250514",
-      max_tokens: 500,
+      max_tokens: 800,
       messages: [{ role: "user", content }],
     });
 
@@ -120,6 +123,8 @@ Important:
         certNumber: parsed.certNumber || null,
         cardNumber: parsed.cardNumber || null,
         confidence: parsed.confidence || "low",
+        frontBoundingBox: parsed.frontBoundingBox || null,
+        backBoundingBox: parsed.backBoundingBox || null,
       },
     });
   } catch (err) {

@@ -930,3 +930,368 @@ main {
     color: var(--text-muted);
     font-size: 1.1rem;
 }
+
+/* ============================================================ */
+/* PRO VIEW — Toggle, Dashboard, Movers, Grid, Sort             */
+/* ============================================================ */
+
+/* --- View Toggle Switch --- */
+.view-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    user-select: none;
+}
+.view-toggle-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    transition: color 0.2s;
+}
+.view-toggle-label.active {
+    color: var(--accent-gold);
+}
+.view-toggle-track {
+    width: 36px;
+    height: 20px;
+    background: var(--border);
+    border-radius: 10px;
+    position: relative;
+    transition: background 0.25s;
+}
+.view-toggle-track.on {
+    background: var(--accent-gold);
+}
+.view-toggle-thumb {
+    width: 16px;
+    height: 16px;
+    background: var(--text-primary);
+    border-radius: 50%;
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    transition: transform 0.25s;
+}
+.view-toggle-track.on .view-toggle-thumb {
+    transform: translateX(16px);
+}
+
+/* --- Pro Controls (sort + grid/table toggle) --- */
+.pro-controls {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-left: auto;
+}
+.sort-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+.sort-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+.sort-select {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    padding: 0.3rem 0.5rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+.sort-dir-btn {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    transition: all 0.2s;
+}
+.sort-dir-btn:hover {
+    border-color: var(--accent-gold);
+    color: var(--accent-gold);
+}
+.view-mode-controls {
+    display: flex;
+    gap: 2px;
+}
+.view-mode-btn {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    width: 30px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.view-mode-btn:first-child { border-radius: 6px 0 0 6px; }
+.view-mode-btn:last-child { border-radius: 0 6px 6px 0; }
+.view-mode-btn.active {
+    background: var(--accent-gold);
+    color: var(--bg-dark);
+    border-color: var(--accent-gold);
+}
+
+/* --- Portfolio Dashboard Strip --- */
+.pro-dashboard {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+    padding: 1.25rem 2rem;
+    background: linear-gradient(135deg, var(--header-bg), var(--bg-card));
+    border-bottom: 1px solid var(--border);
+}
+.dash-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+.dash-card.dash-primary {
+    border-color: var(--accent-gold);
+    background: rgba(212, 168, 67, 0.08);
+}
+.dash-label {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+.dash-value {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+.dash-card.dash-primary .dash-value {
+    color: var(--accent-gold);
+}
+.dash-grades {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+}
+.dash-grade-chip {
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.06);
+}
+
+/* --- Top Movers --- */
+.pro-movers {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    padding: 1rem 2rem;
+    border-bottom: 1px solid var(--border);
+}
+.movers-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 0.6rem;
+}
+.movers-up .movers-title { color: var(--accent-green); }
+.movers-down .movers-title { color: var(--accent-red); }
+.mover-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.6rem 0.75rem;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 0.4rem;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.mover-card:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--accent-gold);
+}
+.mover-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+}
+.mover-name {
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+}
+.mover-product {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+.mover-stats {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.1rem;
+}
+.mover-value {
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: var(--accent-gold);
+}
+.mover-pct {
+    font-weight: 700;
+    font-size: 0.75rem;
+}
+
+/* --- Pro Grid View --- */
+.pro-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1rem;
+    padding: 0.5rem 0;
+}
+.pro-grid-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.pro-grid-card:hover {
+    border-color: var(--accent-gold);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+.grid-card-image {
+    width: 100%;
+    aspect-ratio: 3 / 4;
+    background: var(--bg-dark);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+.grid-card-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.grid-card-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, var(--bg-card), var(--bg-dark));
+}
+.grid-psa-badge {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.08);
+}
+.grid-card-body {
+    padding: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+.grid-card-player {
+    font-weight: 700;
+    font-size: 0.8rem;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.grid-card-product {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.grid-card-footer {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.3rem;
+}
+.grid-card-value {
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: var(--accent-gold);
+}
+.grid-card-pct {
+    font-size: 0.7rem;
+    font-weight: 700;
+}
+
+/* --- Pro Table View --- */
+.pro-table-wrap {
+    overflow-x: auto;
+}
+.pro-table .pro-player-cell {
+    min-width: 140px;
+}
+.pro-player-name {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* --- Mobile adjustments for Pro View --- */
+@media (max-width: 768px) {
+    .view-toggle { gap: 0.3rem; }
+    .view-toggle-label { font-size: 0.6rem; }
+    .view-toggle-track { width: 30px; height: 16px; }
+    .view-toggle-thumb { width: 12px; height: 12px; }
+    .view-toggle-track.on .view-toggle-thumb { transform: translateX(14px); }
+
+    .pro-controls { gap: 0.5rem; }
+
+    .pro-dashboard {
+        grid-template-columns: repeat(2, 1fr);
+        padding: 1rem;
+        gap: 0.6rem;
+    }
+    .dash-value { font-size: 1rem; }
+
+    .pro-movers {
+        grid-template-columns: 1fr;
+        padding: 0.75rem 1rem;
+    }
+
+    .pro-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.6rem;
+    }
+
+    .filter-bar {
+        flex-wrap: wrap;
+    }
+}

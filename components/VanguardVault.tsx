@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import type { Card, PlayerInfo, DataStatus, DataProvider } from "@/lib/types";
 import { LocalProvider, MockProvider, AltProvider, PSAProvider, SupabaseProvider } from "@/lib/providers";
+import { supabase } from "@/lib/supabase/client";
 
 // ============================================================
 // Provider registry
@@ -111,6 +112,15 @@ export default function VanguardVault() {
   const [search, setSearch] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [proView, setProView] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("vv_proView") === "true";
+    }
+    return false;
+  });
+  const [sortBy, setSortBy] = useState<"value" | "grade" | "pct" | "player">("value");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [gridView, setGridView] = useState(false);
 
   // --- Form state ---
   const [formFullName, setFormFullName] = useState("");
@@ -156,6 +166,8 @@ export default function VanguardVault() {
   const [scanBackFile, setScanBackFile] = useState<File | null>(null);
   const [scanFrontPreview, setScanFrontPreview] = useState<string | null>(null);
   const [scanBackPreview, setScanBackPreview] = useState<string | null>(null);
+  const [croppedFrontUrl, setCroppedFrontUrl] = useState<string | null>(null);
+  const [croppedBackUrl, setCroppedBackUrl] = useState<string | null>(null);
 
   // --- Data loading ---
   const loadData = useCallback(async (providerKey: string) => {
@@ -313,6 +325,119 @@ export default function VanguardVault() {
   }, [players]);
 
   // --- Event handlers ---
+  // Toggle pro view and persist preference
+  const handleToggleProView = () => {
+    setProView((prev) => {
+      const next = !prev;
+      localStorage.setItem("vv_proView", String(next));
+      return next;
+    });
+  };
+
+  // --- Pro view computed data ---
+  const dashboardStats = useMemo(() => {
+    const active = cards.filter((c) => !c.soldAt);
+    const sold = cards.filter((c) => !!c.soldAt);
+    const totalValue = active.reduce((sum, c) => sum + (c.value || 0), 0);
+    const totalCards = active.length;
+    const realizedProfit = sold.reduce((sum, c) => sum + ((c.salePrice || 0) - (c.value || 0)), 0);
+    const soldCount = sold.length;
+
+    // Count by grade
+    const gradeBreakdown: Record<number, number> = {};
+    active.forEach((c) => {
+      gradeBreakdown[c.psa] = (gradeBreakdown[c.psa] || 0) + 1;
+    });
+
+    return { totalValue, totalCards, realizedProfit, soldCount, gradeBreakdown };
+  }, [cards]);
+
+  const topMovers = useMemo(() => {
+    const active = cards
+      .map((card, i) => ({ card, originalIndex: i }))
+      .filter((ci) => !ci.card.soldAt && ci.card.pct);
+
+    const parsed = active.map((ci) => {
+      const clean = (ci.card.pct || "").replace(/\s/g, "");
+      const isUp = clean.includes("U");
+      const isDown = clean.includes("D");
+      const numStr = clean.replace("U", "").replace("D", "").replace("%", "").trim();
+      const num = parseFloat(numStr) || 0;
+      const signedNum = isDown ? -num : num;
+      return { ...ci, pctNum: signedNum, isUp, isDown };
+    });
+
+    const sorted = [...parsed].sort((a, b) => b.pctNum - a.pctNum);
+    const gainers = sorted.filter((c) => c.pctNum > 0).slice(0, 3);
+    const losers = sorted.filter((c) => c.pctNum < 0).slice(-3).reverse();
+    // reverse losers so worst is first
+    losers.reverse();
+
+    return { gainers, losers };
+  }, [cards]);
+
+  // Sorted flat card list for pro view
+  const sortedCards = useMemo(() => {
+    const active = cards
+      .map((card, i) => ({ card, originalIndex: i }))
+      .filter((ci) => !ci.card.soldAt);
+
+    // Apply filter
+    let filtered = active;
+    if (filter !== "all") {
+      filtered = filtered.filter((ci) => ci.card.player === filter);
+    }
+    if (search) {
+      const s = search.toLowerCase();
+      filtered = filtered.filter((ci) => {
+        const c = ci.card;
+        const p = players[c.player];
+        const full = p ? p.full.toLowerCase() : "";
+        const team = p ? p.team.toLowerCase() : "";
+        return (
+          c.player.toLowerCase().includes(s) ||
+          full.includes(s) ||
+          team.includes(s) ||
+          c.product.toLowerCase().includes(s) ||
+          String(c.year).includes(s)
+        );
+      });
+    }
+
+    // Sort
+    const sorted = [...filtered];
+    sorted.sort((a, b) => {
+      let cmp = 0;
+      switch (sortBy) {
+        case "value":
+          cmp = (a.card.value || 0) - (b.card.value || 0);
+          break;
+        case "grade":
+          cmp = a.card.psa - b.card.psa;
+          break;
+        case "pct": {
+          const parsePctNum = (pct: string) => {
+            const clean = pct.replace(/\s/g, "");
+            const isDown = clean.includes("D");
+            const num = parseFloat(clean.replace("U", "").replace("D", "").replace("%", "")) || 0;
+            return isDown ? -num : num;
+          };
+          cmp = parsePctNum(a.card.pct || "") - parsePctNum(b.card.pct || "");
+          break;
+        }
+        case "player": {
+          const nameA = (players[a.card.player]?.full || a.card.player).toLowerCase();
+          const nameB = (players[b.card.player]?.full || b.card.player).toLowerCase();
+          cmp = nameA.localeCompare(nameB);
+          break;
+        }
+      }
+      return sortDir === "desc" ? -cmp : cmp;
+    });
+
+    return sorted;
+  }, [cards, players, filter, search, sortBy, sortDir]);
+
   const handleProviderChange = async (key: string) => {
     setActiveProvider(key);
     setFilter("all");
@@ -365,6 +490,8 @@ export default function VanguardVault() {
     setScanBackFile(null);
     setScanFrontPreview(null);
     setScanBackPreview(null);
+    setCroppedFrontUrl(null);
+    setCroppedBackUrl(null);
   };
 
   const handleEditCard = (cardIndex: number) => {
@@ -525,6 +652,76 @@ export default function VanguardVault() {
       img.src = url;
     });
 
+  // Crop card from photo using bounding box from Claude Vision
+  const cropCardImage = (
+    file: File,
+    bbox: { x: number; y: number; width: number; height: number }
+  ): Promise<Blob> =>
+    new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        // Convert percentage-based bbox to pixel coordinates
+        const sx = Math.round(bbox.x * img.width);
+        const sy = Math.round(bbox.y * img.height);
+        const sw = Math.round(bbox.width * img.width);
+        const sh = Math.round(bbox.height * img.height);
+
+        const canvas = document.createElement("canvas");
+        canvas.width = sw;
+        canvas.height = sh;
+        const ctx = canvas.getContext("2d")!;
+        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+        URL.revokeObjectURL(url);
+
+        canvas.toBlob(
+          (blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error("Failed to crop image"));
+          },
+          "image/jpeg",
+          0.9
+        );
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error("Failed to load image for cropping"));
+      };
+      img.src = url;
+    });
+
+  // Upload image blob to Supabase Storage, return public URL
+  const uploadCardImage = async (
+    blob: Blob,
+    side: "front" | "back"
+  ): Promise<string | null> => {
+    try {
+      const fileName = `${side}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.jpg`;
+      const filePath = `cards/${fileName}`;
+
+      const { error } = await supabase.storage
+        .from("card-images")
+        .upload(filePath, blob, {
+          contentType: "image/jpeg",
+          upsert: false,
+        });
+
+      if (error) {
+        console.error("Upload error:", error.message);
+        return null;
+      }
+
+      const { data: urlData } = supabase.storage
+        .from("card-images")
+        .getPublicUrl(filePath);
+
+      return urlData.publicUrl;
+    } catch (err) {
+      console.error("Upload failed:", err);
+      return null;
+    }
+  };
+
   const triggerScan = async (front: File, back: File) => {
     setScanning(true);
     setScanError(null);
@@ -564,6 +761,29 @@ export default function VanguardVault() {
         fetchPsaCert(card.certNumber);
       }
       setScanConfidence(card.confidence);
+
+      // Crop and upload card images using bounding boxes
+      try {
+        if (card.frontBoundingBox) {
+          const croppedFront = await cropCardImage(front, card.frontBoundingBox);
+          const frontUrl = await uploadCardImage(croppedFront, "front");
+          if (frontUrl) {
+            setScanFrontPreview(URL.createObjectURL(croppedFront));
+            setCroppedFrontUrl(frontUrl);
+          }
+        }
+        if (card.backBoundingBox) {
+          const croppedBack = await cropCardImage(back, card.backBoundingBox);
+          const backUrl = await uploadCardImage(croppedBack, "back");
+          if (backUrl) {
+            setScanBackPreview(URL.createObjectURL(croppedBack));
+            setCroppedBackUrl(backUrl);
+          }
+        }
+      } catch (cropErr) {
+        console.error("Crop/upload error:", cropErr);
+        // Non-fatal — card data was still extracted
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Scan failed";
       setScanError(message);
@@ -621,7 +841,11 @@ export default function VanguardVault() {
     }
 
     const certNumber = formCert.trim() || undefined;
-    const card: Card = { year, player: playerKey, product, psa, value, pct, range, certNumber };
+    const card: Card = {
+      year, player: playerKey, product, psa, value, pct, range, certNumber,
+      frontImageUrl: croppedFrontUrl || undefined,
+      backImageUrl: croppedBackUrl || undefined,
+    };
 
     const provider = PROVIDERS[activeProvider];
 
@@ -725,6 +949,13 @@ export default function VanguardVault() {
           <p className="subtitle">Sherry&apos;s Trading Cards</p>
         </div>
         <div className="header-right">
+          <div className="view-toggle" onClick={handleToggleProView} title={proView ? "Switch to Classic" : "Switch to Pro"}>
+            <span className={`view-toggle-label ${!proView ? "active" : ""}`}>Classic</span>
+            <div className={`view-toggle-track ${proView ? "on" : ""}`}>
+              <div className="view-toggle-thumb" />
+            </div>
+            <span className={`view-toggle-label ${proView ? "active" : ""}`}>Pro</span>
+          </div>
           <button className="psa-lookup-btn" onClick={() => { setPsaLookupOpen(!psaLookupOpen); setPsaLookupResult(null); setPsaLookupError(null); setPsaLookupCert(""); }}>
             PSA Lookup
           </button>
@@ -806,6 +1037,32 @@ export default function VanguardVault() {
             );
           })}
         </select>
+
+        {/* Sort & Grid controls — Pro view only */}
+        {proView && (
+          <div className="pro-controls">
+            <div className="sort-controls">
+              <label className="sort-label">Sort</label>
+              <select className="sort-select" value={sortBy} onChange={(e) => setSortBy(e.target.value as typeof sortBy)}>
+                <option value="value">Value</option>
+                <option value="grade">Grade</option>
+                <option value="pct">% Change</option>
+                <option value="player">Player</option>
+              </select>
+              <button className="sort-dir-btn" onClick={() => setSortDir((d) => d === "asc" ? "desc" : "asc")} title={sortDir === "desc" ? "Highest first" : "Lowest first"}>
+                {sortDir === "desc" ? "\u25BC" : "\u25B2"}
+              </button>
+            </div>
+            <div className="view-mode-controls">
+              <button className={`view-mode-btn ${!gridView ? "active" : ""}`} onClick={() => setGridView(false)} title="Table view">
+                &#9776;
+              </button>
+              <button className={`view-mode-btn ${gridView ? "active" : ""}`} onClick={() => setGridView(true)} title="Grid view">
+                &#9638;
+              </button>
+            </div>
+          </div>
+        )}
       </nav>
 
       {/* STATUS BAR */}
@@ -842,129 +1099,300 @@ export default function VanguardVault() {
         </div>
       </div>
 
-      {/* MAIN GRID */}
+      {/* ============================================================ */}
+      {/* PRO VIEW — Dashboard, Top Movers, Sorted Grid/Table          */}
+      {/* ============================================================ */}
+      {proView && !status.loading && (
+        <>
+          {/* PORTFOLIO DASHBOARD */}
+          <div className="pro-dashboard">
+            <div className="dash-card dash-primary">
+              <span className="dash-label">Portfolio Value</span>
+              <span className="dash-value">${dashboardStats.totalValue.toLocaleString()}</span>
+            </div>
+            <div className="dash-card">
+              <span className="dash-label">Active Cards</span>
+              <span className="dash-value">{dashboardStats.totalCards}</span>
+            </div>
+            <div className="dash-card">
+              <span className="dash-label">Realized P/L</span>
+              <span className={`dash-value ${dashboardStats.realizedProfit >= 0 ? "profit-positive" : "profit-negative"}`}>
+                {dashboardStats.realizedProfit >= 0 ? "+" : ""}${dashboardStats.realizedProfit.toLocaleString()}
+              </span>
+            </div>
+            <div className="dash-card">
+              <span className="dash-label">Sold</span>
+              <span className="dash-value">{dashboardStats.soldCount}</span>
+            </div>
+            <div className="dash-card">
+              <span className="dash-label">Grade Split</span>
+              <div className="dash-grades">
+                {[10, 9, 8, 7, 6, 0].map((g) =>
+                  dashboardStats.gradeBreakdown[g] ? (
+                    <span key={g} className={`dash-grade-chip psa-${g}`}>
+                      {g === 0 ? "Raw" : g}: {dashboardStats.gradeBreakdown[g]}
+                    </span>
+                  ) : null
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* TOP MOVERS */}
+          {(topMovers.gainers.length > 0 || topMovers.losers.length > 0) && (
+            <div className="pro-movers">
+              {topMovers.gainers.length > 0 && (
+                <div className="movers-col movers-up">
+                  <h3 className="movers-title">Top Gainers</h3>
+                  {topMovers.gainers.map((ci) => {
+                    const info = players[ci.card.player];
+                    return (
+                      <div key={ci.originalIndex} className="mover-card" onClick={() => handleEditCard(ci.originalIndex)}>
+                        <div className="mover-info">
+                          <span className="mover-name">{info?.full || ci.card.player}</span>
+                          <span className="mover-product">{ci.card.year} {ci.card.product}</span>
+                        </div>
+                        <div className="mover-stats">
+                          <span className="mover-value">${ci.card.value}</span>
+                          <span className="mover-pct pct-up">{"\u25B2"} {Math.abs(ci.pctNum)}%</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {topMovers.losers.length > 0 && (
+                <div className="movers-col movers-down">
+                  <h3 className="movers-title">Top Losers</h3>
+                  {topMovers.losers.map((ci) => {
+                    const info = players[ci.card.player];
+                    return (
+                      <div key={ci.originalIndex} className="mover-card" onClick={() => handleEditCard(ci.originalIndex)}>
+                        <div className="mover-info">
+                          <span className="mover-name">{info?.full || ci.card.player}</span>
+                          <span className="mover-product">{ci.card.year} {ci.card.product}</span>
+                        </div>
+                        <div className="mover-stats">
+                          <span className="mover-value">${ci.card.value}</span>
+                          <span className="mover-pct pct-down">{"\u25BC"} {Math.abs(ci.pctNum)}%</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* MAIN CONTENT */}
       <main>
         {status.loading ? (
           <div className="loading-overlay">
             <div className="spinner"></div>
             Loading cards...
           </div>
-        ) : order.length === 0 ? (
-          <div className="no-results">No cards found.</div>
-        ) : (
-          order.map((playerKey) => {
-            const playerCards = groups[playerKey];
-            const info = players[playerKey] || {
-              full: playerKey,
-              team: "",
-            };
-            const imgUrl = getPlayerImage(players, playerKey);
-            const fallbackUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(
-              info.full
-            )}&background=1e293b&color=d4a843&size=120&bold=true&font-size=0.4`;
-            const totalValue = playerCards.reduce(
-              (sum, ci) => sum + (ci.card.value || 0),
-              0
-            );
-
-            return (
-              <section
-                key={playerKey}
-                className="player-section"
-                data-player={playerKey}
-              >
-                <div className="player-header">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    className="player-photo"
-                    src={imgUrl || fallbackUrl}
-                    alt={info.full}
-                    loading="lazy"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.onerror = null;
-                      target.src = fallbackUrl;
-                    }}
-                  />
-                  <div className="player-info">
-                    <h2>{info.full}</h2>
-                    <span className="team">{info.team}</span>
-                  </div>
-                  <div
-                    style={{
-                      marginLeft: "auto",
-                      textAlign: "right",
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontSize: "0.7rem",
-                        color: "var(--text-muted)",
-                        textTransform: "uppercase",
-                        letterSpacing: "1px",
-                      }}
-                    >
-                      Portfolio Value
+        ) : proView ? (
+          /* ---- PRO VIEW: sorted flat list or grid ---- */
+          sortedCards.length === 0 ? (
+            <div className="no-results">No cards found.</div>
+          ) : gridView ? (
+            /* GRID VIEW */
+            <div className="pro-grid">
+              {sortedCards.map((ci) => {
+                const c = ci.card;
+                const info = players[c.player];
+                const pct = parsePct(c.pct || "");
+                const imgSrc = c.frontImageUrl || c._psaImageUrl || null;
+                return (
+                  <div key={ci.originalIndex} className="pro-grid-card" onClick={() => handleEditCard(ci.originalIndex)}>
+                    <div className="grid-card-image">
+                      {imgSrc ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={imgSrc} alt={c.product} />
+                      ) : (
+                        <div className="grid-card-placeholder">
+                          <span className={`grid-psa-badge psa-${c.psa}`}>{c.psa === 0 ? "RAW" : `PSA ${c.psa}`}</span>
+                        </div>
+                      )}
                     </div>
-                    <div
-                      style={{
-                        fontSize: "1.2rem",
-                        fontWeight: 700,
-                        color: "var(--accent-gold)",
-                      }}
-                    >
-                      ${totalValue.toLocaleString()}
-                    </div>
-                  </div>
-                </div>
-
-                <table className="card-table">
-                  <thead>
-                    <tr>
-                      <th>Year</th>
-                      <th>Product</th>
-                      <th>PSA</th>
-                      <th>Alt Value</th>
-                      <th>Alt %</th>
-                      <th>6-Mo Range</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {playerCards.map((ci, i) => {
-                      const c = ci.card;
-                      const pct = parsePct(c.pct || "");
-                      return (
-                        <tr
-                          key={`${c.player}-${c.product}-${c.psa}-${i}`}
-                          className="card-row-clickable"
-                          onClick={() => handleEditCard(ci.originalIndex)}
-                        >
-                          <td className="year">{c.year}</td>
-                          <td className="product">{c.product || "\u2014"}</td>
-                          <td className={`psa psa-${c.psa}`}>{c.psa === 0 ? "Raw" : c.psa}</td>
-                          <td className="value">${c.value}</td>
-                          <td
-                            className={`pct ${
-                              pct.dir === "up"
-                                ? "pct-up"
-                                : pct.dir === "down"
-                                  ? "pct-down"
-                                  : ""
-                            }`}
-                          >
+                    <div className="grid-card-body">
+                      <span className="grid-card-player">{info?.full || c.player}</span>
+                      <span className="grid-card-product">{c.year} {c.product}</span>
+                      <div className="grid-card-footer">
+                        <span className="grid-card-value">${c.value}</span>
+                        {pct.dir && (
+                          <span className={`grid-card-pct ${pct.dir === "up" ? "pct-up" : "pct-down"}`}>
                             {pct.display}
-                          </td>
-                          <td className="range">
-                            {c.range ? `$${c.range}` : "\u2014"}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </section>
-            );
-          })
+                          </span>
+                        )}
+                        <span className={`grid-psa-badge psa-${c.psa}`}>{c.psa === 0 ? "Raw" : c.psa}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            /* TABLE VIEW — flat sorted table */
+            <div className="pro-table-wrap">
+              <table className="card-table pro-table">
+                <thead>
+                  <tr>
+                    <th>Player</th>
+                    <th>Year</th>
+                    <th>Product</th>
+                    <th>PSA</th>
+                    <th>Value</th>
+                    <th>%</th>
+                    <th>Range</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedCards.map((ci, i) => {
+                    const c = ci.card;
+                    const info = players[c.player];
+                    const pct = parsePct(c.pct || "");
+                    return (
+                      <tr key={`pro-${ci.originalIndex}-${i}`} className="card-row-clickable" onClick={() => handleEditCard(ci.originalIndex)}>
+                        <td className="pro-player-cell">
+                          <span className="pro-player-name">{info?.full || c.player}</span>
+                        </td>
+                        <td className="year">{c.year}</td>
+                        <td className="product">{c.product || "\u2014"}</td>
+                        <td className={`psa psa-${c.psa}`}>{c.psa === 0 ? "Raw" : c.psa}</td>
+                        <td className="value">${c.value}</td>
+                        <td className={`pct ${pct.dir === "up" ? "pct-up" : pct.dir === "down" ? "pct-down" : ""}`}>
+                          {pct.display}
+                        </td>
+                        <td className="range">{c.range ? `$${c.range}` : "\u2014"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )
+        ) : (
+          /* ---- CLASSIC VIEW: grouped by player ---- */
+          order.length === 0 ? (
+            <div className="no-results">No cards found.</div>
+          ) : (
+            order.map((playerKey) => {
+              const playerCards = groups[playerKey];
+              const info = players[playerKey] || {
+                full: playerKey,
+                team: "",
+              };
+              const imgUrl = getPlayerImage(players, playerKey);
+              const fallbackUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                info.full
+              )}&background=1e293b&color=d4a843&size=120&bold=true&font-size=0.4`;
+              const totalValue = playerCards.reduce(
+                (sum, ci) => sum + (ci.card.value || 0),
+                0
+              );
+
+              return (
+                <section
+                  key={playerKey}
+                  className="player-section"
+                  data-player={playerKey}
+                >
+                  <div className="player-header">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      className="player-photo"
+                      src={imgUrl || fallbackUrl}
+                      alt={info.full}
+                      loading="lazy"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.onerror = null;
+                        target.src = fallbackUrl;
+                      }}
+                    />
+                    <div className="player-info">
+                      <h2>{info.full}</h2>
+                      <span className="team">{info.team}</span>
+                    </div>
+                    <div
+                      style={{
+                        marginLeft: "auto",
+                        textAlign: "right",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: "0.7rem",
+                          color: "var(--text-muted)",
+                          textTransform: "uppercase",
+                          letterSpacing: "1px",
+                        }}
+                      >
+                        Portfolio Value
+                      </div>
+                      <div
+                        style={{
+                          fontSize: "1.2rem",
+                          fontWeight: 700,
+                          color: "var(--accent-gold)",
+                        }}
+                      >
+                        ${totalValue.toLocaleString()}
+                      </div>
+                    </div>
+                  </div>
+
+                  <table className="card-table">
+                    <thead>
+                      <tr>
+                        <th>Year</th>
+                        <th>Product</th>
+                        <th>PSA</th>
+                        <th>Alt Value</th>
+                        <th>Alt %</th>
+                        <th>6-Mo Range</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {playerCards.map((ci, i) => {
+                        const c = ci.card;
+                        const pct = parsePct(c.pct || "");
+                        return (
+                          <tr
+                            key={`${c.player}-${c.product}-${c.psa}-${i}`}
+                            className="card-row-clickable"
+                            onClick={() => handleEditCard(ci.originalIndex)}
+                          >
+                            <td className="year">{c.year}</td>
+                            <td className="product">{c.product || "\u2014"}</td>
+                            <td className={`psa psa-${c.psa}`}>{c.psa === 0 ? "Raw" : c.psa}</td>
+                            <td className="value">${c.value}</td>
+                            <td
+                              className={`pct ${
+                                pct.dir === "up"
+                                  ? "pct-up"
+                                  : pct.dir === "down"
+                                    ? "pct-down"
+                                    : ""
+                              }`}
+                            >
+                              {pct.display}
+                            </td>
+                            <td className="range">
+                              {c.range ? `$${c.range}` : "\u2014"}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </section>
+              );
+            })
+          )
         )}
 
         {/* SOLD CARDS SECTION */}

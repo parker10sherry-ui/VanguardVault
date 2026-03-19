@@ -45,6 +45,8 @@ function cardToRow(card: Card, playerKey: string) {
     range: card.range || "",
     purchase: card.purchase || "",
     cert_number: card.certNumber || null,
+    front_image_url: card.frontImageUrl || null,
+    back_image_url: card.backImageUrl || null,
     source: "user",
   };
 }
@@ -121,6 +123,8 @@ export const SupabaseProvider: DataProvider = {
         pct: card.pct || "",
         range: card.range || "",
         cert_number: card.certNumber || null,
+        front_image_url: card.frontImageUrl || null,
+        back_image_url: card.backImageUrl || null,
         sale_price: card.salePrice || null,
         sold_at: card.soldAt || null,
         updated_at: new Date().toISOString(),
