@@ -121,6 +121,8 @@ export default function VanguardVault() {
   const [sortBy, setSortBy] = useState<"value" | "grade" | "pct" | "player">("value");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [gridView, setGridView] = useState(false);
+  const [proModalEdit, setProModalEdit] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   // --- Form state ---
   const [formFullName, setFormFullName] = useState("");
@@ -325,6 +327,12 @@ export default function VanguardVault() {
   }, [players]);
 
   // --- Event handlers ---
+  // Show toast notification (auto-dismiss after 3s)
+  const showToast = useCallback((message: string, type: "success" | "error" = "success") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  }, []);
+
   // Toggle pro view and persist preference
   const handleToggleProView = () => {
     setProView((prev) => {
@@ -492,6 +500,7 @@ export default function VanguardVault() {
     setScanBackPreview(null);
     setCroppedFrontUrl(null);
     setCroppedBackUrl(null);
+    setProModalEdit(false);
   };
 
   const handleEditCard = (cardIndex: number) => {
@@ -873,9 +882,11 @@ export default function VanguardVault() {
       setPlayers((prev) => ({ ...prev, [playerKey!]: newPlayerData! }));
     }
 
+    const wasEditing = editingIndex !== null;
     setModalOpen(false);
     resetForm();
     setSubmitting(false);
+    if (proView) showToast(wasEditing ? "Card updated" : "Card added");
   };
 
   const handleSellCard = async () => {
@@ -905,6 +916,7 @@ export default function VanguardVault() {
     setModalOpen(false);
     resetForm();
     setSubmitting(false);
+    if (proView) showToast("Card sold");
   };
 
   const handleUnsellCard = async () => {
@@ -933,6 +945,7 @@ export default function VanguardVault() {
     setModalOpen(false);
     resetForm();
     setSubmitting(false);
+    if (proView) showToast("Sale reversed");
   };
 
   // ============================================================
@@ -1189,10 +1202,31 @@ export default function VanguardVault() {
       {/* MAIN CONTENT */}
       <main>
         {status.loading ? (
-          <div className="loading-overlay">
-            <div className="spinner"></div>
-            Loading cards...
-          </div>
+          proView ? (
+            /* PRO SKELETON LOADING */
+            <div className="skeleton-wrap">
+              <div className="skeleton-dash">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="skeleton-card"><div className="skeleton-line skeleton-lg" /><div className="skeleton-line skeleton-sm" /></div>
+                ))}
+              </div>
+              <div className="skeleton-rows">
+                {[1, 2, 3, 4, 5, 6].map((i) => (
+                  <div key={i} className="skeleton-row">
+                    <div className="skeleton-line skeleton-md" />
+                    <div className="skeleton-line skeleton-sm" />
+                    <div className="skeleton-line skeleton-xs" />
+                    <div className="skeleton-line skeleton-xs" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="loading-overlay">
+              <div className="spinner"></div>
+              Loading cards...
+            </div>
+          )
         ) : proView ? (
           /* ---- PRO VIEW: sorted flat list or grid ---- */
           sortedCards.length === 0 ? (
@@ -1466,7 +1500,7 @@ export default function VanguardVault() {
           if (e.target === e.currentTarget) setModalOpen(false);
         }}
       >
-        <div className="modal">
+        <div className={`modal ${proView && editingIndex !== null ? "pro-modal" : ""}`}>
           <div className="modal-header">
             <h3>{editingIndex !== null ? (cards[editingIndex]?.soldAt ? "Sold Card" : "Edit Card") : "Add New Card"}</h3>
             <button
@@ -1476,6 +1510,128 @@ export default function VanguardVault() {
               &times;
             </button>
           </div>
+
+          {/* ============================================================ */}
+          {/* PRO DETAIL VIEW — shows card details first, edit as secondary */}
+          {/* ============================================================ */}
+          {proView && editingIndex !== null && !proModalEdit && (() => {
+            const detailCard = cards[editingIndex];
+            const detailInfo = players[detailCard?.player] || { full: detailCard?.player, team: "" };
+            const detailPct = parsePct(detailCard?.pct || "");
+            const detailImg = psaData?.imageUrl || detailCard?._psaImageUrl || detailCard?.frontImageUrl || scanFrontPreview;
+            return (
+              <div className="pro-detail">
+                {/* Hero image */}
+                {detailImg && (
+                  <div className="pro-detail-image">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={detailImg} alt="Card" />
+                  </div>
+                )}
+
+                {/* Card info */}
+                <div className="pro-detail-header">
+                  <h2 className="pro-detail-name">{detailInfo.full}</h2>
+                  <span className="pro-detail-team">{detailInfo.team}</span>
+                </div>
+
+                <div className="pro-detail-stats">
+                  <div className="pro-stat">
+                    <span className="pro-stat-label">Year</span>
+                    <span className="pro-stat-value">{detailCard?.year}</span>
+                  </div>
+                  <div className="pro-stat">
+                    <span className="pro-stat-label">Product</span>
+                    <span className="pro-stat-value">{detailCard?.product}</span>
+                  </div>
+                  <div className="pro-stat">
+                    <span className="pro-stat-label">Grade</span>
+                    <span className={`pro-stat-value psa-${detailCard?.psa}`}>{detailCard?.psa === 0 ? "Raw" : `PSA ${detailCard?.psa}`}</span>
+                  </div>
+                  <div className="pro-stat">
+                    <span className="pro-stat-label">Value</span>
+                    <span className="pro-stat-value pro-stat-gold">${detailCard?.value}</span>
+                  </div>
+                  {detailPct.dir && (
+                    <div className="pro-stat">
+                      <span className="pro-stat-label">Change</span>
+                      <span className={`pro-stat-value ${detailPct.dir === "up" ? "pct-up" : "pct-down"}`}>{detailPct.display}</span>
+                    </div>
+                  )}
+                  {detailCard?.range && (
+                    <div className="pro-stat">
+                      <span className="pro-stat-label">6-Mo Range</span>
+                      <span className="pro-stat-value">${detailCard.range}</span>
+                    </div>
+                  )}
+                  {detailCard?.certNumber && (
+                    <div className="pro-stat">
+                      <span className="pro-stat-label">Cert #</span>
+                      <span className="pro-stat-value">{detailCard.certNumber}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* PSA Verification */}
+                {psaLoading && <div className="psa-info-section"><span className="psa-loading">Verifying with PSA...</span></div>}
+                {psaData && !psaLoading && (
+                  <div className="psa-info-section">
+                    <div className="psa-verified-badge">PSA VERIFIED</div>
+                    <div className="psa-info-grid">
+                      <div className="psa-info-item"><span className="psa-info-label">Grade</span><span className="psa-info-value">{psaData.grade}</span></div>
+                      <div className="psa-info-item"><span className="psa-info-label">Population</span><span className="psa-info-value">{psaData.population.toLocaleString()}</span></div>
+                      <div className="psa-info-item"><span className="psa-info-label">Pop Higher</span><span className="psa-info-value">{psaData.populationHigher.toLocaleString()}</span></div>
+                    </div>
+                    {psaData.externalUrl && (
+                      <a href={psaData.externalUrl} target="_blank" rel="noopener noreferrer" className="psa-link">View on PSA →</a>
+                    )}
+                  </div>
+                )}
+
+                {/* Sold info */}
+                {detailCard?.soldAt && (
+                  <div className="sold-info-section">
+                    <div className="sold-info-row"><span>Sale Price:</span><span className="sold-info-value">${detailCard.salePrice?.toLocaleString()}</span></div>
+                    <div className="sold-info-row">
+                      <span>Profit:</span>
+                      <span className={((detailCard.salePrice || 0) - (detailCard.value || 0)) >= 0 ? "profit-positive" : "profit-negative"}>
+                        {((detailCard.salePrice || 0) - (detailCard.value || 0)) >= 0 ? "+" : ""}${((detailCard.salePrice || 0) - (detailCard.value || 0)).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="sold-info-row"><span>Sold:</span><span className="sold-info-value">{new Date(detailCard.soldAt).toLocaleString()}</span></div>
+                  </div>
+                )}
+
+                {/* Action buttons */}
+                <div className="pro-detail-actions">
+                  <button className="pro-edit-btn" onClick={() => setProModalEdit(true)}>Edit Card</button>
+                  {!detailCard?.soldAt && (
+                    <button className="pro-sell-btn" onClick={() => { setProModalEdit(true); setSellMode(true); }}>Sell Card</button>
+                  )}
+                </div>
+
+                {/* Unsell for sold cards */}
+                {detailCard?.soldAt && (
+                  <div className="unsell-section">
+                    <div className="unsell-row">
+                      <input type="password" placeholder="Enter code to reverse" value={unsellCode} onChange={(e) => setUnsellCode(e.target.value)} className="unsell-code-input" />
+                      <button type="button" className="unsell-btn" disabled={submitting || unsellCode !== "0319"} onClick={handleUnsellCard}>Reverse Sale</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* ============================================================ */}
+          {/* CLASSIC MODAL / PRO EDIT MODE — form view                    */}
+          {/* ============================================================ */}
+          {(!proView || editingIndex === null || proModalEdit) && (
+          <>
+          {/* Back to detail button (pro edit mode) */}
+          {proView && proModalEdit && editingIndex !== null && (
+            <button className="pro-back-btn" onClick={() => setProModalEdit(false)}>&larr; Back to Details</button>
+          )}
 
           {/* Card Image Display (PSA image, stored image, or scan preview) */}
           {editingIndex !== null && (psaData?.imageUrl || cards[editingIndex]?._psaImageUrl || cards[editingIndex]?.frontImageUrl || scanFrontPreview) && (
@@ -1805,8 +1961,19 @@ export default function VanguardVault() {
               </div>
             </div>
           )}
+          </>
+          )}
+
+          {/* TOAST NOTIFICATION */}
         </div>
       </div>
+
+      {/* Toast */}
+      {toast && (
+        <div className={`toast toast-${toast.type}`}>
+          {toast.message}
+        </div>
+      )}
     </>
   );
 }
