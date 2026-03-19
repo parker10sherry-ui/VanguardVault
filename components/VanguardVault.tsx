@@ -358,6 +358,12 @@ export default function VanguardVault() {
       // Auto-scan if back is already taken
       if (scanBackFile) {
         setTimeout(() => triggerScan(file, scanBackFile), 100);
+      } else {
+        // Auto-prompt for back photo
+        setTimeout(() => {
+          const backInput = document.getElementById("scan-back");
+          if (backInput) backInput.click();
+        }, 300);
       }
     } else {
       setScanBackFile(file);
@@ -433,7 +439,7 @@ export default function VanguardVault() {
       if (card.team) setFormTeam(card.team);
       if (card.year) setFormYear(String(card.year));
       if (card.product) setFormProduct(card.product);
-      if (card.psaGrade != null) setFormPSA(String(card.psaGrade));
+      setFormPSA(card.psaGrade != null ? String(card.psaGrade) : "0");
       if (card.certNumber) setFormCert(card.certNumber);
       setScanConfidence(card.confidence);
     } catch (err) {
