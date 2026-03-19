@@ -26,6 +26,17 @@
         <button class="filter-btn active" data-filter="all">All Players</button>
     </nav>
 
+    <div class="status-bar" id="statusBar">
+        <div class="status-left">
+            <span class="status-source" id="statusSource">Local</span>
+            <span class="status-updated" id="statusUpdated"></span>
+        </div>
+        <div class="status-right">
+            <span class="status-error" id="statusError"></span>
+            <button class="refresh-btn" id="refreshBtn" title="Refresh data">&#8635; Refresh</button>
+        </div>
+    </div>
+
     <main id="cardGrid"></main>
 
     <!-- Add Card Modal -->
@@ -96,6 +107,8 @@
     </div>
 
     <script src="data.js"></script>
+    <script src="providers.js"></script>
+    <script src="cardDataService.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

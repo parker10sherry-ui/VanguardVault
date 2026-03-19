@@ -1,3 +1,8 @@
+// ============================================================
+// app.js — UI layer for Vanguard Vault
+// Reads all data through CardDataService, never from globals.
+// ============================================================
+
 // === DOM REFS ===
 const grid = document.getElementById("cardGrid");
 const searchInput = document.getElementById("searchInput");
@@ -6,99 +11,70 @@ const addCardBtn = document.getElementById("addCardBtn");
 const modalOverlay = document.getElementById("modalOverlay");
 const modalClose = document.getElementById("modalClose");
 const addCardForm = document.getElementById("addCardForm");
+const refreshBtn = document.getElementById("refreshBtn");
+const statusSource = document.getElementById("statusSource");
+const statusUpdated = document.getElementById("statusUpdated");
+const statusError = document.getElementById("statusError");
 
-// === GENERATE SHORT KEY FROM FULL NAME ===
-// "Peyton Manning" → "P. Manning", "Jaxon Smith-Njigba" → "J. Smith-Njigba"
+// === HELPERS ===
+
 function generatePlayerKey(fullName) {
     const parts = fullName.trim().split(/\s+/);
     if (parts.length === 1) return parts[0];
-    const first = parts[0][0] + ".";
-    const rest = parts.slice(1).join(" ");
-    return `${first} ${rest}`;
+    return `${parts[0][0]}. ${parts.slice(1).join(" ")}`;
 }
 
-// === FIND EXISTING PLAYER BY FULL NAME ===
 function findPlayerByFullName(fullName) {
     const lower = fullName.trim().toLowerCase();
-    for (const [key, info] of Object.entries(PLAYERS)) {
+    const players = CardDataService.getPlayers();
+    for (const [key, info] of Object.entries(players)) {
         if (info.full.toLowerCase() === lower) return key;
     }
     return null;
 }
 
-// === FETCH ESPN ID FOR A NEW PLAYER ===
 async function fetchEspnId(fullName) {
-    // Try v2 search first (includes retired players)
+    // Try v2 search (includes retired players)
     try {
         const url = `https://site.web.api.espn.com/apis/search/v2?query=${encodeURIComponent(fullName)}&limit=1&page=1&type=player&sport=football&league=nfl`;
         const res = await fetch(url);
         if (res.ok) {
             const data = await res.json();
-            // v2 returns results nested under data.results or similar
-            const results = data.results || [];
-            for (const group of results) {
-                const items = group.contents || group.items || [];
-                for (const item of items) {
-                    // Extract numeric ID from uid like "s:20~l:28~a:1428"
+            for (const group of (data.results || [])) {
+                for (const item of (group.contents || [])) {
                     if (item.uid) {
                         const match = item.uid.match(/~a:(\d+)/);
                         if (match) return parseInt(match[1]);
                     }
-                    // Fallback: use id if it's purely numeric
                     if (item.id && /^\d+$/.test(item.id)) return parseInt(item.id);
                 }
             }
         }
     } catch (e) { /* try fallback */ }
 
-    // Fallback to v3 search (active players only)
+    // Fallback to v3 (active players only)
     try {
         const url = `https://site.web.api.espn.com/apis/common/v3/search?query=${encodeURIComponent(fullName)}&limit=1&type=player&sport=football`;
         const res = await fetch(url);
         if (res.ok) {
             const data = await res.json();
-            if (data.items && data.items.length > 0) {
-                return parseInt(data.items[0].id);
-            }
+            if (data.items && data.items.length > 0) return parseInt(data.items[0].id);
         }
-    } catch (e) { /* silently fall back to no photo */ }
+    } catch (e) { /* no photo */ }
 
     return null;
 }
 
-// === LOAD USER-ADDED CARDS FROM LOCALSTORAGE ===
-function loadUserCards() {
-    try {
-        const saved = localStorage.getItem("vanguardVault_userCards");
-        if (saved) {
-            const userCards = JSON.parse(saved);
-            userCards.forEach(c => CARDS.push(c));
-        }
-        const savedPlayers = localStorage.getItem("vanguardVault_userPlayers");
-        if (savedPlayers) {
-            const userPlayers = JSON.parse(savedPlayers);
-            Object.assign(PLAYERS, userPlayers);
-        }
-    } catch (e) { /* ignore parse errors */ }
+function parsePct(pct) {
+    if (!pct) return { dir: "", num: 0, display: "—" };
+    const clean = pct.replace(/\s/g, "");
+    const up = clean.includes("U");
+    const down = clean.includes("D");
+    const dir = up ? "up" : down ? "down" : "";
+    const arrow = up ? "▲" : down ? "▼" : "";
+    return { dir, display: `${arrow} ${clean.replace("U","").replace("D","").trim()}` };
 }
 
-function saveUserCard(card, playerKey, playerData) {
-    try {
-        const saved = localStorage.getItem("vanguardVault_userCards");
-        const userCards = saved ? JSON.parse(saved) : [];
-        userCards.push(card);
-        localStorage.setItem("vanguardVault_userCards", JSON.stringify(userCards));
-
-        if (playerData) {
-            const savedPlayers = localStorage.getItem("vanguardVault_userPlayers");
-            const userPlayers = savedPlayers ? JSON.parse(savedPlayers) : {};
-            userPlayers[playerKey] = playerData;
-            localStorage.setItem("vanguardVault_userPlayers", JSON.stringify(userPlayers));
-        }
-    } catch (e) { /* ignore storage errors */ }
-}
-
-// === GROUP CARDS BY PLAYER ===
 function groupByPlayer(cards) {
     const groups = {};
     const order = [];
@@ -112,21 +88,42 @@ function groupByPlayer(cards) {
     return { groups, order };
 }
 
-// === PARSE PERCENTAGE ===
-function parsePct(pct) {
-    if (!pct) return { dir: "", num: 0, display: "—" };
-    const clean = pct.replace(/\s/g, "");
-    const up = clean.includes("U");
-    const down = clean.includes("D");
-    const num = parseFloat(clean) || 0;
-    const dir = up ? "up" : down ? "down" : "";
-    const arrow = up ? "▲" : down ? "▼" : "";
-    return { dir, num, display: `${arrow} ${clean.replace("U","").replace("D","").trim()}` };
+// === STATUS BAR ===
+
+function updateStatusBar(status) {
+    statusSource.textContent = status.source;
+
+    if (status.lastUpdated) {
+        statusUpdated.textContent = `Updated ${status.lastUpdated.toLocaleTimeString()}`;
+    }
+
+    if (status.error) {
+        statusError.textContent = status.error;
+        statusError.style.display = "";
+    } else {
+        statusError.textContent = "";
+        statusError.style.display = "none";
+    }
+
+    if (status.loading) {
+        refreshBtn.classList.add("spinning");
+    } else {
+        refreshBtn.classList.remove("spinning");
+    }
 }
 
 // === RENDER ===
+
 function render(filter = "all", search = "") {
-    let filtered = CARDS;
+    const status = CardDataService.getStatus();
+
+    // Loading state
+    if (status.loading) {
+        grid.innerHTML = '<div class="loading-overlay"><div class="spinner"></div>Loading cards...</div>';
+        return;
+    }
+
+    let filtered = CardDataService.getCards();
 
     if (filter !== "all") {
         filtered = filtered.filter(c => c.player === filter);
@@ -134,8 +131,9 @@ function render(filter = "all", search = "") {
 
     if (search) {
         const s = search.toLowerCase();
+        const players = CardDataService.getPlayers();
         filtered = filtered.filter(c => {
-            const p = PLAYERS[c.player];
+            const p = players[c.player];
             const full = p ? p.full.toLowerCase() : "";
             const team = p ? p.team.toLowerCase() : "";
             return c.player.toLowerCase().includes(s) ||
@@ -148,6 +146,7 @@ function render(filter = "all", search = "") {
 
     const { groups, order } = groupByPlayer(filtered);
 
+    // Empty state
     if (order.length === 0) {
         grid.innerHTML = '<div class="no-results">No cards found.</div>';
         return;
@@ -157,8 +156,8 @@ function render(filter = "all", search = "") {
 
     order.forEach(playerKey => {
         const cards = groups[playerKey];
-        const info = PLAYERS[playerKey] || { full: playerKey, team: "" };
-        const imgUrl = getPlayerImage(playerKey);
+        const info = CardDataService.getPlayerInfo(playerKey) || { full: playerKey, team: "" };
+        const imgUrl = CardDataService.getPlayerImage(playerKey);
         const fallbackUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(info.full)}&background=1e293b&color=d4a843&size=120&bold=true&font-size=0.4`;
 
         const totalValue = cards.reduce((sum, c) => sum + (c.value || 0), 0);
@@ -211,33 +210,33 @@ function render(filter = "all", search = "") {
     grid.innerHTML = html;
 }
 
-// === BUILD FILTER BUTTONS ===
+// === FILTER BUTTONS ===
+
 function buildFilters() {
+    filterBar.innerHTML = '<button class="filter-btn active" data-filter="all">All Players</button>';
+
     const seen = new Set();
-    const players = [];
-    CARDS.forEach(c => {
+    const players = CardDataService.getPlayers();
+    CardDataService.getCards().forEach(c => {
         if (!seen.has(c.player)) {
             seen.add(c.player);
-            const info = PLAYERS[c.player] || { full: c.player };
-            players.push({ key: c.player, name: info.full });
+            const info = players[c.player] || { full: c.player };
+            const btn = document.createElement("button");
+            btn.className = "filter-btn";
+            btn.dataset.filter = c.player;
+            btn.textContent = info.full;
+            filterBar.appendChild(btn);
         }
-    });
-
-    players.forEach(p => {
-        const btn = document.createElement("button");
-        btn.className = "filter-btn";
-        btn.dataset.filter = p.key;
-        btn.textContent = p.name;
-        filterBar.appendChild(btn);
     });
 }
 
-// === POPULATE PLAYER DATALIST (by full name) ===
+// === PLAYER DATALIST ===
+
 function populatePlayerList() {
     const datalist = document.getElementById("playerList");
     datalist.innerHTML = "";
     const seen = new Set();
-    for (const info of Object.values(PLAYERS)) {
+    for (const info of Object.values(CardDataService.getPlayers())) {
         if (!seen.has(info.full)) {
             seen.add(info.full);
             const opt = document.createElement("option");
@@ -247,7 +246,8 @@ function populatePlayerList() {
     }
 }
 
-// === MODAL LOGIC ===
+// === MODAL ===
+
 addCardBtn.addEventListener("click", () => {
     populatePlayerList();
     document.getElementById("formFullName").value = "";
@@ -261,23 +261,20 @@ addCardBtn.addEventListener("click", () => {
     modalOverlay.classList.add("active");
 });
 
-modalClose.addEventListener("click", () => {
-    modalOverlay.classList.remove("active");
-});
-
+modalClose.addEventListener("click", () => modalOverlay.classList.remove("active"));
 modalOverlay.addEventListener("click", (e) => {
     if (e.target === modalOverlay) modalOverlay.classList.remove("active");
 });
 
-// Auto-fill team when selecting an existing player by full name
 document.getElementById("formFullName").addEventListener("input", function() {
     const existingKey = findPlayerByFullName(this.value);
     if (existingKey) {
-        document.getElementById("formTeam").value = PLAYERS[existingKey].team;
+        document.getElementById("formTeam").value = CardDataService.getPlayerInfo(existingKey).team;
     }
 });
 
 // === FORM SUBMISSION ===
+
 addCardForm.addEventListener("submit", async (e) => {
     e.preventDefault();
 
@@ -295,64 +292,48 @@ addCardForm.addEventListener("submit", async (e) => {
 
     const pct = pctVal ? `${pctVal} ${pctDir}`.trim() : "";
 
-    // Check if this player already exists (by full name)
     let playerKey = findPlayerByFullName(fullName);
     let newPlayerData = null;
 
     if (!playerKey) {
-        // New player — generate key and look up ESPN headshot
         playerKey = generatePlayerKey(fullName);
-
-        // Avoid key collisions
         let baseKey = playerKey;
         let counter = 2;
-        while (PLAYERS[playerKey]) {
+        const players = CardDataService.getPlayers();
+        while (players[playerKey]) {
             playerKey = `${baseKey} ${counter}`;
             counter++;
         }
 
-        // Show loading state on button
         const submitBtn = addCardForm.querySelector(".form-submit");
         const origText = submitBtn.textContent;
         submitBtn.textContent = "Looking up player...";
         submitBtn.disabled = true;
 
-        // Fetch ESPN ID for headshot
         const espnId = await fetchEspnId(fullName);
 
         submitBtn.textContent = origText;
         submitBtn.disabled = false;
 
-        newPlayerData = {
-            full: fullName,
-            team: team || "Unknown",
-            espnId: espnId
-        };
-        PLAYERS[playerKey] = newPlayerData;
+        newPlayerData = { full: fullName, team: team || "Unknown", espnId };
     }
 
     const card = { year, player: playerKey, product, psa, value, pct, range };
 
-    CARDS.push(card);
-    saveUserCard(card, playerKey, newPlayerData);
+    await CardDataService.addCard(card, playerKey, newPlayerData);
 
-    // Close modal and re-render
     modalOverlay.classList.remove("active");
-
-    // Rebuild filters in case new player was added
-    filterBar.innerHTML = '<button class="filter-btn active" data-filter="all">All Players</button>';
     buildFilters();
-
     render("all", searchInput.value);
 });
 
 // === EVENT LISTENERS ===
+
 filterBar.addEventListener("click", e => {
     if (!e.target.classList.contains("filter-btn")) return;
     filterBar.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
     e.target.classList.add("active");
-    const filter = e.target.dataset.filter;
-    render(filter, searchInput.value);
+    render(e.target.dataset.filter, searchInput.value);
 });
 
 searchInput.addEventListener("input", () => {
@@ -361,7 +342,18 @@ searchInput.addEventListener("input", () => {
     render("all", searchInput.value);
 });
 
+refreshBtn.addEventListener("click", async () => {
+    await CardDataService.refresh();
+    buildFilters();
+    render("all", searchInput.value);
+});
+
+// === SUBSCRIBE TO DATA CHANGES ===
+CardDataService.onChange(updateStatusBar);
+
 // === INIT ===
-loadUserCards();
-buildFilters();
-render();
+(async () => {
+    await CardDataService.load();
+    buildFilters();
+    render();
+})();

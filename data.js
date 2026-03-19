@@ -1,4 +1,4 @@
-const PLAYERS = {
+const SEED_PLAYERS = {
     "S. Sanders":    { full: "Shedeur Sanders",      team: "Cleveland Browns",              espnId: 4432762 },
     "J. Dart":       { full: "Jaxson Dart",           team: "New York Giants",               espnId: 4689114 },
     "C. Ward":       { full: "Cam Ward",              team: "Tennessee Titans",              espnId: 4688380 },
@@ -48,17 +48,7 @@ const PLAYERS = {
     "X. Worthy":     { full: "Xavier Worthy",         team: "Kansas City Chiefs",            espnId: 4683062 },
 };
 
-// Player photo URLs (ESPN NFL headshots)
-function getPlayerImage(shortName) {
-    const p = PLAYERS[shortName];
-    if (!p) return "";
-    if (p.espnId) {
-        return `https://a.espncdn.com/i/headshots/nfl/players/full/${p.espnId}.png`;
-    }
-    return "";
-}
-
-const CARDS = [
+const SEED_CARDS = [
     // === S. Sanders ===
     { year: 2025, player: "S. Sanders", product: "Rev-New Wave", psa: 6, value: 11, pct: "", range: "", purchase: "" },
     { year: 2025, player: "S. Sanders", product: "Rev-New Wave", psa: 7, value: 13, pct: "40% D", range: "", purchase: "" },
