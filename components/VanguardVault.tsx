@@ -167,6 +167,26 @@ export default function VanguardVault() {
     year: string; product: string; verified: boolean;
   } | null>(null);
   const [psaLoading, setPsaLoading] = useState(false);
+  // --- eBay Quick Price Check state ---
+  const [ebayCheckOpen, setEbayCheckOpen] = useState(false);
+  const [ebayCheckQuery, setEbayCheckQuery] = useState("");
+  const [ebayCheckGrade, setEbayCheckGrade] = useState("");
+  const [ebayCheckResults, setEbayCheckResults] = useState<{
+    itemId: string; title: string; price: number; currency: string;
+    imageUrl: string; itemUrl: string; condition: string;
+    seller: string; sellerFeedback: string;
+    gradeLabel: string; gradeMatch: "exact" | "different" | "unknown";
+    listingDate: string;
+  }[]>([]);
+  const [ebayCheckLoading, setEbayCheckLoading] = useState(false);
+  const [ebayCheckError, setEbayCheckError] = useState<string | null>(null);
+  const [ebayCheckAvg, setEbayCheckAvg] = useState<number | null>(null);
+  const [ebayCheckLow, setEbayCheckLow] = useState<number | null>(null);
+  const [ebayCheckHigh, setEbayCheckHigh] = useState<number | null>(null);
+  const [ebayCheckTotal, setEbayCheckTotal] = useState(0);
+  const [ebayCheckListOpen, setEbayCheckListOpen] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+
   const [psaLookupOpen, setPsaLookupOpen] = useState(false);
   const [psaLookupCert, setPsaLookupCert] = useState("");
   const [psaLookupResult, setPsaLookupResult] = useState<{
@@ -872,6 +892,66 @@ export default function VanguardVault() {
     }
   };
 
+  // --- eBay Quick Price Check ---
+  const handleEbayCheck = async () => {
+    const q = ebayCheckQuery.trim();
+    if (!q) return;
+    setEbayCheckLoading(true);
+    setEbayCheckError(null);
+    setEbayCheckResults([]);
+    setEbayCheckAvg(null);
+    setEbayCheckLow(null);
+    setEbayCheckHigh(null);
+    setEbayCheckTotal(0);
+    setEbayCheckListOpen(false);
+
+    try {
+      const gradeParam = ebayCheckGrade ? `&grade=${ebayCheckGrade}` : "";
+      const res = await fetch(`/api/ebay-prices?q=${encodeURIComponent(q)}&limit=20${gradeParam}`);
+      if (!res.ok) throw new Error("Failed to fetch eBay prices");
+      const data = await res.json();
+      const results = data.results || [];
+      setEbayCheckResults(results);
+      setEbayCheckTotal(data.total || 0);
+      if (results.length > 0) {
+        const prices = results.map((r: { price: number }) => r.price).filter((p: number) => p > 0);
+        if (prices.length > 0) {
+          setEbayCheckAvg(Math.round(prices.reduce((a: number, b: number) => a + b, 0) / prices.length));
+          setEbayCheckLow(Math.min(...prices));
+          setEbayCheckHigh(Math.max(...prices));
+        }
+      }
+      setEbayCheckListOpen(true);
+    } catch (err) {
+      setEbayCheckError(err instanceof Error ? err.message : "Failed to search eBay");
+    } finally {
+      setEbayCheckLoading(false);
+    }
+  };
+
+  const startVoiceInput = () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const W = window as any;
+    const SpeechRecognition = W.SpeechRecognition || W.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setEbayCheckError("Voice input not supported in this browser");
+      return;
+    }
+    const recognition = new SpeechRecognition();
+    recognition.lang = "en-US";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    setIsListening(true);
+    recognition.onresult = (event: { results: { transcript: string }[][] }) => {
+      const transcript = event.results[0][0].transcript;
+      setEbayCheckQuery(transcript);
+      setIsListening(false);
+    };
+    recognition.onerror = () => { setIsListening(false); };
+    recognition.onend = () => { setIsListening(false); };
+    recognition.start();
+  };
+
   const fileToBase64 = (file: File): Promise<{ data: string; mediaType: string }> =>
     new Promise((resolve, reject) => {
       // Draw to canvas to convert any format (HEIC, etc.) to JPEG
@@ -1219,6 +1299,9 @@ export default function VanguardVault() {
             </div>
             <span className={`view-toggle-label ${proView ? "active" : ""}`}>Pro</span>
           </div>
+          <button className="ebay-check-btn" onClick={() => { setEbayCheckOpen(!ebayCheckOpen); setEbayCheckResults([]); setEbayCheckError(null); setEbayCheckAvg(null); setEbayCheckLow(null); setEbayCheckHigh(null); setEbayCheckTotal(0); setEbayCheckListOpen(false); }}>
+            Price Check
+          </button>
           <button className="psa-lookup-btn" onClick={() => { setPsaLookupOpen(!psaLookupOpen); setPsaLookupResult(null); setPsaLookupError(null); setPsaLookupCert(""); }}>
             PSA Lookup
           </button>
@@ -1235,6 +1318,83 @@ export default function VanguardVault() {
           </div>
         </div>
       </header>
+
+      {/* EBAY QUICK PRICE CHECK PANEL */}
+      {ebayCheckOpen && (
+        <div className="ebay-check-panel">
+          <div className="ebay-check-input-row">
+            <input
+              type="text"
+              placeholder="e.g. Jalen Hurts 2020 Prizm Rookie"
+              value={ebayCheckQuery}
+              onChange={(e) => setEbayCheckQuery(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleEbayCheck(); }}
+              className="ebay-check-input"
+            />
+            <select
+              className="ebay-check-grade"
+              value={ebayCheckGrade}
+              onChange={(e) => setEbayCheckGrade(e.target.value)}
+            >
+              <option value="">Any Grade</option>
+              <option value="10">PSA 10</option>
+              <option value="9">PSA 9</option>
+              <option value="8">PSA 8</option>
+              <option value="7">PSA 7</option>
+              <option value="0">Raw</option>
+            </select>
+            <button className="ebay-check-mic" onClick={startVoiceInput} disabled={isListening} title="Voice search">
+              {isListening ? "..." : "\uD83C\uDF99"}
+            </button>
+            <button
+              className="ebay-check-go"
+              onClick={handleEbayCheck}
+              disabled={ebayCheckLoading || !ebayCheckQuery.trim()}
+            >
+              {ebayCheckLoading ? "Searching..." : "Search"}
+            </button>
+          </div>
+          {ebayCheckError && <div className="ebay-check-error">{ebayCheckError}</div>}
+          {ebayCheckAvg !== null && (
+            <div className="ebay-check-summary">
+              <div className="ebay-stat"><span className="ebay-stat-label">Avg</span><span className="ebay-stat-value">${ebayCheckAvg.toLocaleString()}</span></div>
+              <div className="ebay-stat"><span className="ebay-stat-label">Low</span><span className="ebay-stat-value">${ebayCheckLow?.toLocaleString()}</span></div>
+              <div className="ebay-stat"><span className="ebay-stat-label">High</span><span className="ebay-stat-value">${ebayCheckHigh?.toLocaleString()}</span></div>
+              <div className="ebay-stat"><span className="ebay-stat-label">Listings</span><span className="ebay-stat-value">{ebayCheckTotal.toLocaleString()}</span></div>
+            </div>
+          )}
+          {!ebayCheckLoading && ebayCheckResults.length === 0 && ebayCheckAvg === null && ebayCheckQuery.trim() && !ebayCheckError && (
+            <div className="ebay-check-hint">Search any card to see current eBay market prices</div>
+          )}
+          {ebayCheckListOpen && ebayCheckResults.length > 0 && (
+            <div className="ebay-check-list">
+              {ebayCheckResults.map((comp) => (
+                <a key={comp.itemId} href={comp.itemUrl} target="_blank" rel="noopener noreferrer" className={`ebay-comp-item ${comp.gradeMatch === "different" ? "ebay-comp-diff" : ""}`}>
+                  {comp.imageUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={comp.imageUrl} alt="" className="ebay-comp-img" />
+                  )}
+                  <div className="ebay-comp-info">
+                    <span className="ebay-comp-title">{comp.title}</span>
+                    <div className="ebay-comp-meta-row">
+                      {comp.gradeLabel && (
+                        <span className={`ebay-grade-badge ${comp.gradeMatch === "exact" ? "grade-exact" : comp.gradeMatch === "different" ? "grade-diff" : ""}`}>
+                          {comp.gradeLabel}
+                        </span>
+                      )}
+                      {comp.listingDate && (
+                        <span className="ebay-comp-date">{new Date(comp.listingDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
+                      )}
+                      <span className="ebay-comp-meta">{comp.seller}</span>
+                    </div>
+                  </div>
+                  <span className="ebay-comp-price">${comp.price.toLocaleString()}</span>
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* PSA LOOKUP PANEL */}
       {psaLookupOpen && (
