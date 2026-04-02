@@ -670,6 +670,29 @@ export default function VanguardVault() {
     const card = cards[cardIndex];
     if (!card) return;
 
+    // Reset modal state for fresh view
+    setProModalEdit(false);
+    setSellMode(false);
+    setPsaData(null);
+    setPsaLoading(false);
+    setFormSalePrice("");
+    setUnsellCode("");
+    setScanError(null);
+    setScanConfidence(null);
+    setScanFrontFile(null);
+    setScanBackFile(null);
+    setScanFrontPreview(null);
+    setScanBackPreview(null);
+    setCroppedFrontUrl(null);
+    setCroppedBackUrl(null);
+    setEbayComps([]);
+    setEbayCompsAvg(null);
+    setEbayCompsLow(null);
+    setEbayCompsHigh(null);
+    setEbayCompsTotal(0);
+    setEbayCompsOpen(false);
+    setEbayCompsError(null);
+
     const info = players[card.player];
     setFormFullName(info ? info.full : card.player);
     setFormTeam(info ? info.team : "");
@@ -701,7 +724,6 @@ export default function VanguardVault() {
     setFormPurchase(card.purchase || "");
     setEditingIndex(cardIndex);
     setModalOpen(true);
-    setEbayCompsOpen(false);
 
     // Auto-fetch PSA data if card has a cert number
     if (card.certNumber) {
@@ -1197,7 +1219,7 @@ export default function VanguardVault() {
           <button className="psa-lookup-btn" onClick={() => { setPsaLookupOpen(!psaLookupOpen); setPsaLookupResult(null); setPsaLookupError(null); setPsaLookupCert(""); }}>
             PSA Lookup
           </button>
-          <button className="add-card-btn" onClick={() => setModalOpen(true)}>
+          <button className="add-card-btn" onClick={() => { resetForm(); setModalOpen(true); }}>
             + Add Card
           </button>
           <div className="search-box">
@@ -1767,7 +1789,7 @@ export default function VanguardVault() {
       <div
         className={`modal-overlay ${modalOpen ? "active" : ""}`}
         onClick={(e) => {
-          if (e.target === e.currentTarget) setModalOpen(false);
+          if (e.target === e.currentTarget) { setModalOpen(false); resetForm(); }
         }}
       >
         <div className={`modal ${editingIndex !== null ? "pro-modal" : ""}`}>
@@ -1775,7 +1797,7 @@ export default function VanguardVault() {
             <h3>{editingIndex !== null ? (cards[editingIndex]?.soldAt ? "Sold Card" : "Edit Card") : "Add New Card"}</h3>
             <button
               className="modal-close"
-              onClick={() => setModalOpen(false)}
+              onClick={() => { setModalOpen(false); resetForm(); }}
             >
               &times;
             </button>
@@ -2390,7 +2412,7 @@ export default function VanguardVault() {
             <span className="bottom-nav-icon">&#9733;</span>
             <span className="bottom-nav-label">Portfolio</span>
           </button>
-          <button className="bottom-nav-btn" onClick={() => { setProTab("portfolio"); setModalOpen(true); }}>
+          <button className="bottom-nav-btn" onClick={() => { setProTab("portfolio"); resetForm(); setModalOpen(true); }}>
             <span className="bottom-nav-icon bottom-nav-scan">&#9211;</span>
             <span className="bottom-nav-label">Scan</span>
           </button>
