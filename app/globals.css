@@ -1558,9 +1558,38 @@ main {
     overflow: hidden;
     text-overflow: ellipsis;
 }
+.ebay-comp-meta-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
 .ebay-comp-meta {
     font-size: 0.62rem;
     color: var(--text-muted);
+}
+.ebay-grade-badge {
+    font-size: 0.58rem;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    background: var(--border);
+    color: var(--text-secondary);
+}
+.ebay-grade-badge.grade-exact {
+    background: rgba(34, 197, 94, 0.15);
+    color: var(--accent-green);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+}
+.ebay-grade-badge.grade-diff {
+    background: rgba(234, 179, 8, 0.15);
+    color: #eab308;
+    border: 1px solid rgba(234, 179, 8, 0.3);
+}
+.ebay-comp-diff {
+    border-left: 2px solid #eab308;
 }
 .ebay-comp-price {
     font-size: 0.85rem;

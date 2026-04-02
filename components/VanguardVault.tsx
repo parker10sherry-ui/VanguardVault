@@ -193,6 +193,7 @@ export default function VanguardVault() {
     itemId: string; title: string; price: number; currency: string;
     imageUrl: string; itemUrl: string; condition: string;
     seller: string; sellerFeedback: string;
+    gradeLabel: string; gradeMatch: "exact" | "different" | "unknown";
   }[]>([]);
   const [ebayCompsLoading, setEbayCompsLoading] = useState(false);
   const [ebayCompsError, setEbayCompsError] = useState<string | null>(null);
@@ -811,10 +812,11 @@ export default function VanguardVault() {
     try {
       const info = players[card.player];
       const playerName = info?.full || card.player;
-      const gradeStr = card.psa > 0 ? `PSA ${card.psa}` : "";
-      const query = `${playerName} ${card.year} ${card.product} ${gradeStr}`.trim();
+      // Search without grade — get broader results, grade matching is done server-side
+      const query = `${playerName} ${card.year} ${card.product}`.trim();
+      const gradeParam = `&grade=${card.psa}`;
 
-      const res = await fetch(`/api/ebay-prices?q=${encodeURIComponent(query)}&limit=10`);
+      const res = await fetch(`/api/ebay-prices?q=${encodeURIComponent(query)}&limit=20${gradeParam}`);
       if (!res.ok) throw new Error("Failed to fetch eBay comps");
       const data = await res.json();
 
@@ -1932,14 +1934,21 @@ export default function VanguardVault() {
                   {ebayCompsOpen && ebayComps.length > 0 && (
                     <div className="ebay-comps-list">
                       {ebayComps.map((comp) => (
-                        <a key={comp.itemId} href={comp.itemUrl} target="_blank" rel="noopener noreferrer" className="ebay-comp-item">
+                        <a key={comp.itemId} href={comp.itemUrl} target="_blank" rel="noopener noreferrer" className={`ebay-comp-item ${comp.gradeMatch === "different" ? "ebay-comp-diff" : ""}`}>
                           {comp.imageUrl && (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img src={comp.imageUrl} alt="" className="ebay-comp-img" />
                           )}
                           <div className="ebay-comp-info">
                             <span className="ebay-comp-title">{comp.title}</span>
-                            <span className="ebay-comp-meta">{comp.condition} &middot; {comp.seller}</span>
+                            <div className="ebay-comp-meta-row">
+                              {comp.gradeLabel && (
+                                <span className={`ebay-grade-badge ${comp.gradeMatch === "exact" ? "grade-exact" : comp.gradeMatch === "different" ? "grade-diff" : ""}`}>
+                                  {comp.gradeLabel}
+                                </span>
+                              )}
+                              <span className="ebay-comp-meta">{comp.seller}</span>
+                            </div>
                           </div>
                           <span className="ebay-comp-price">${comp.price.toLocaleString()}</span>
                         </a>

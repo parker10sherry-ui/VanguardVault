@@ -6,8 +6,9 @@
 // current market value.
 //
 // Query params:
-//   q       — search query (e.g. "Jalen Hurts Prizm Rookie PSA 10")
-//   limit   — max results (default 10, max 50)
+//   q       — search query (e.g. "Jalen Hurts Prizm Rookie")
+//   grade   — PSA grade to tag matches (e.g. "10")
+//   limit   — max results (default 20, max 50)
 //
 // Credentials are server-side only (never exposed to browser).
 // ============================================================
@@ -18,7 +19,6 @@ import { NextRequest, NextResponse } from "next/server";
 let tokenCache: { token: string; expiresAt: number } | null = null;
 
 async function getEbayToken(): Promise<string> {
-  // Return cached token if still valid (with 60s buffer)
   if (tokenCache && Date.now() < tokenCache.expiresAt - 60_000) {
     return tokenCache.token;
   }
@@ -56,6 +56,39 @@ async function getEbayToken(): Promise<string> {
   return data.access_token;
 }
 
+// --- Grade detection from listing title ---
+function detectGrade(title: string): { grade: number; gradeLabel: string } | null {
+  const upper = title.toUpperCase();
+
+  // PSA grades: "PSA 10", "PSA10", "PSA GEM MT 10"
+  const psaMatch = upper.match(/PSA\s*(?:GEM\s*(?:MT|MINT)\s*)?(\d{1,2}(?:\.5)?)/);
+  if (psaMatch) return { grade: parseFloat(psaMatch[1]), gradeLabel: `PSA ${psaMatch[1]}` };
+
+  // BGS/BVG grades: "BGS 9.5", "BVG 8"
+  const bgsMatch = upper.match(/B[GV][GS]\s*(\d{1,2}(?:\.\d)?)/);
+  if (bgsMatch) return { grade: parseFloat(bgsMatch[1]), gradeLabel: `BGS ${bgsMatch[1]}` };
+
+  // SGC grades: "SGC 10", "SGC 98"
+  const sgcMatch = upper.match(/SGC\s*(\d{1,3})/);
+  if (sgcMatch) {
+    const val = parseInt(sgcMatch[1]);
+    // SGC uses both 10-point and 100-point scale
+    const normalized = val > 10 ? Math.round(val / 10) : val;
+    return { grade: normalized, gradeLabel: `SGC ${sgcMatch[1]}` };
+  }
+
+  // CGC grades
+  const cgcMatch = upper.match(/CGC\s*(\d{1,2}(?:\.\d)?)/);
+  if (cgcMatch) return { grade: parseFloat(cgcMatch[1]), gradeLabel: `CGC ${cgcMatch[1]}` };
+
+  // Check for "RAW" or "UNGRADED"
+  if (upper.includes("RAW") || upper.includes("UNGRADED") || upper.includes("BASE")) {
+    return { grade: 0, gradeLabel: "Raw" };
+  }
+
+  return null;
+}
+
 // --- Response types ---
 interface EbayItemSummary {
   itemId: string;
@@ -64,6 +97,7 @@ interface EbayItemSummary {
   image?: { imageUrl: string };
   itemWebUrl?: string;
   condition?: string;
+  conditionId?: string;
   seller?: { username: string; feedbackPercentage: string; feedbackScore: number };
   categories?: { categoryId: string; categoryName: string }[];
   buyingOptions?: string[];
@@ -90,6 +124,9 @@ export interface EbayPriceResult {
   seller: string;
   sellerFeedback: string;
   buyingOption: string;
+  detectedGrade: number | null;
+  gradeLabel: string;
+  gradeMatch: "exact" | "different" | "unknown";
 }
 
 // ============================================================
@@ -98,8 +135,9 @@ export interface EbayPriceResult {
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const query = searchParams.get("q");
+  const userGrade = searchParams.get("grade");
   const limitParam = searchParams.get("limit");
-  const limit = Math.min(Math.max(parseInt(limitParam || "10", 10) || 10, 1), 50);
+  const limit = Math.min(Math.max(parseInt(limitParam || "20", 10) || 20, 1), 50);
 
   if (!query || !query.trim()) {
     return NextResponse.json(
@@ -108,7 +146,6 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // Check credentials
   if (!process.env.EBAY_CLIENT_ID || !process.env.EBAY_CLIENT_SECRET) {
     return NextResponse.json(
       {
@@ -121,16 +158,19 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  const userGradeNum = userGrade ? parseFloat(userGrade) : null;
+
   try {
     const token = await getEbayToken();
 
-    // Search eBay Browse API — category 213 = Sports Trading Cards
+    // Search eBay Browse API
+    // category_ids: 213 = Sports Trading Cards (broadest, includes all sub-categories)
+    // No buying option filter — include both BIN and auction
     const params = new URLSearchParams({
       q: query,
       category_ids: "213",
       limit: String(limit),
-      sort: "price",
-      filter: "deliveryCountry:US,buyingOptions:{FIXED_PRICE}",
+      filter: "deliveryCountry:US",
     });
 
     const searchRes = await fetch(
@@ -159,24 +199,43 @@ export async function GET(request: NextRequest) {
     const searchData: EbaySearchResponse = await searchRes.json();
     const items = searchData.itemSummaries || [];
 
-    const results: EbayPriceResult[] = items.map((item) => ({
-      itemId: item.itemId,
-      title: item.title,
-      price: parseFloat(item.price?.value || "0"),
-      currency: item.price?.currency || "USD",
-      imageUrl: item.image?.imageUrl || "",
-      itemUrl: item.itemWebUrl || "",
-      condition: item.condition || "Not Specified",
-      seller: item.seller?.username || "",
-      sellerFeedback: item.seller?.feedbackPercentage || "",
-      buyingOption: item.buyingOptions?.[0] || "",
-    }));
+    const results: EbayPriceResult[] = items.map((item) => {
+      const detected = detectGrade(item.title);
+      let gradeMatch: "exact" | "different" | "unknown" = "unknown";
+
+      if (userGradeNum !== null && detected) {
+        gradeMatch = detected.grade === userGradeNum ? "exact" : "different";
+      } else if (userGradeNum === 0 && item.condition === "Ungraded") {
+        gradeMatch = "exact";
+      }
+
+      return {
+        itemId: item.itemId,
+        title: item.title,
+        price: parseFloat(item.price?.value || "0"),
+        currency: item.price?.currency || "USD",
+        imageUrl: item.image?.imageUrl || "",
+        itemUrl: item.itemWebUrl || "",
+        condition: item.condition || "Not Specified",
+        seller: item.seller?.username || "",
+        sellerFeedback: item.seller?.feedbackPercentage || "",
+        buyingOption: item.buyingOptions?.[0] || "",
+        detectedGrade: detected?.grade ?? null,
+        gradeLabel: detected?.gradeLabel || (item.condition === "Ungraded" ? "Raw" : ""),
+        gradeMatch,
+      };
+    });
+
+    // Sort: exact grade matches first, then different, then unknown
+    const sortOrder = { exact: 0, different: 1, unknown: 2 };
+    results.sort((a, b) => sortOrder[a.gradeMatch] - sortOrder[b.gradeMatch]);
 
     return NextResponse.json({
       query,
       total: searchData.total || 0,
       results,
       source: "ebay",
+      userGrade: userGradeNum,
       lastUpdated: new Date().toISOString(),
     });
   } catch (error: unknown) {
