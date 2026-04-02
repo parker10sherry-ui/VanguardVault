@@ -194,6 +194,7 @@ export default function VanguardVault() {
     imageUrl: string; itemUrl: string; condition: string;
     seller: string; sellerFeedback: string;
     gradeLabel: string; gradeMatch: "exact" | "different" | "unknown";
+    listingDate: string;
   }[]>([]);
   const [ebayCompsLoading, setEbayCompsLoading] = useState(false);
   const [ebayCompsError, setEbayCompsError] = useState<string | null>(null);
@@ -1946,6 +1947,9 @@ export default function VanguardVault() {
                                 <span className={`ebay-grade-badge ${comp.gradeMatch === "exact" ? "grade-exact" : comp.gradeMatch === "different" ? "grade-diff" : ""}`}>
                                   {comp.gradeLabel}
                                 </span>
+                              )}
+                              {comp.listingDate && (
+                                <span className="ebay-comp-date">{new Date(comp.listingDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
                               )}
                               <span className="ebay-comp-meta">{comp.seller}</span>
                             </div>

@@ -89,6 +89,18 @@ function detectGrade(title: string): { grade: number; gradeLabel: string } | nul
   return null;
 }
 
+// --- Lot / bundle detection ---
+function isBulkLot(title: string): boolean {
+  const upper = title.toUpperCase();
+  // Explicit lot/bundle keywords
+  if (/\b(LOT|BUNDLE|COLLECTION|SET OF|PACK OF)\b/.test(upper)) return true;
+  // Multiplier patterns: "x2", "x3", "(2)", "(3)", "2x", "3x", "qty 2"
+  if (/\b\d+\s*X\b|\bX\s*\d+\b|\(\d{1,2}\)|\bQTY\s*\d+/i.test(upper)) return true;
+  // Multiple card counts: "5 cards", "10 card"
+  if (/\b\d{1,3}\s+CARDS?\b/.test(upper)) return true;
+  return false;
+}
+
 // --- Response types ---
 interface EbayItemSummary {
   itemId: string;
@@ -102,6 +114,7 @@ interface EbayItemSummary {
   categories?: { categoryId: string; categoryName: string }[];
   buyingOptions?: string[];
   itemLocation?: { country: string; postalCode?: string };
+  itemCreationDate?: string;
 }
 
 interface EbaySearchResponse {
@@ -127,6 +140,8 @@ export interface EbayPriceResult {
   detectedGrade: number | null;
   gradeLabel: string;
   gradeMatch: "exact" | "different" | "unknown";
+  listingDate: string;
+  isBulkLot: boolean;
 }
 
 // ============================================================
@@ -166,11 +181,14 @@ export async function GET(request: NextRequest) {
     // Search eBay Browse API
     // category_ids: 213 = Sports Trading Cards (broadest, includes all sub-categories)
     // No buying option filter — include both BIN and auction
+    // Request more items than needed so we can filter out bulk lots
+    const fetchLimit = Math.min(limit + 15, 50);
     const params = new URLSearchParams({
       q: query,
       category_ids: "213",
-      limit: String(limit),
+      limit: String(fetchLimit),
       filter: "deliveryCountry:US",
+      fieldgroups: "EXTENDED",
     });
 
     const searchRes = await fetch(
@@ -199,7 +217,7 @@ export async function GET(request: NextRequest) {
     const searchData: EbaySearchResponse = await searchRes.json();
     const items = searchData.itemSummaries || [];
 
-    const results: EbayPriceResult[] = items.map((item) => {
+    const allResults: EbayPriceResult[] = items.map((item) => {
       const detected = detectGrade(item.title);
       let gradeMatch: "exact" | "different" | "unknown" = "unknown";
 
@@ -223,8 +241,13 @@ export async function GET(request: NextRequest) {
         detectedGrade: detected?.grade ?? null,
         gradeLabel: detected?.gradeLabel || (item.condition === "Ungraded" ? "Raw" : ""),
         gradeMatch,
+        listingDate: item.itemCreationDate || "",
+        isBulkLot: isBulkLot(item.title),
       };
     });
+
+    // Filter out bulk lots and trim to requested limit
+    const results = allResults.filter((r) => !r.isBulkLot).slice(0, limit);
 
     // Sort: exact grade matches first, then different, then unknown
     const sortOrder = { exact: 0, different: 1, unknown: 2 };
