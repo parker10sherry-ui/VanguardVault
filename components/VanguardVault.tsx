@@ -188,6 +188,20 @@ export default function VanguardVault() {
   const [croppedFrontUrl, setCroppedFrontUrl] = useState<string | null>(null);
   const [croppedBackUrl, setCroppedBackUrl] = useState<string | null>(null);
 
+  // --- eBay comps state ---
+  const [ebayComps, setEbayComps] = useState<{
+    itemId: string; title: string; price: number; currency: string;
+    imageUrl: string; itemUrl: string; condition: string;
+    seller: string; sellerFeedback: string;
+  }[]>([]);
+  const [ebayCompsLoading, setEbayCompsLoading] = useState(false);
+  const [ebayCompsError, setEbayCompsError] = useState<string | null>(null);
+  const [ebayCompsAvg, setEbayCompsAvg] = useState<number | null>(null);
+  const [ebayCompsLow, setEbayCompsLow] = useState<number | null>(null);
+  const [ebayCompsHigh, setEbayCompsHigh] = useState<number | null>(null);
+  const [ebayCompsTotal, setEbayCompsTotal] = useState(0);
+  const [ebayCompsOpen, setEbayCompsOpen] = useState(false);
+
   // --- Data loading ---
   const loadData = useCallback(async (providerKey: string) => {
     const provider = PROVIDERS[providerKey];
@@ -256,6 +270,42 @@ export default function VanguardVault() {
     loadData(activeProvider);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Batch-fetch PSA images for cards that have cert numbers but no image
+  useEffect(() => {
+    const cardsNeedingImages = cards
+      .map((c, i) => ({ cert: c.certNumber, index: i, hasImage: !!(c.frontImageUrl || c._psaImageUrl) }))
+      .filter((c) => c.cert && !c.hasImage);
+
+    if (cardsNeedingImages.length === 0) return;
+
+    const certs = cardsNeedingImages.map((c) => c.cert).join(",");
+    fetch(`/api/psa-cards?certs=${certs}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data.cards || data.cards.length === 0) return;
+        // Build a map of cert -> imageUrl
+        const imageMap = new Map<string, string>();
+        for (const psaCard of data.cards) {
+          if (psaCard.imageUrl) {
+            imageMap.set(psaCard.certNumber, psaCard.imageUrl);
+          }
+        }
+        if (imageMap.size === 0) return;
+        setCards((prev) => {
+          const updated = [...prev];
+          for (const item of cardsNeedingImages) {
+            const url = imageMap.get(item.cert!);
+            if (url && updated[item.index]) {
+              updated[item.index] = { ...updated[item.index], _psaImageUrl: url };
+            }
+          }
+          return updated;
+        });
+      })
+      .catch(() => { /* non-fatal */ });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cards.length]);
 
   // --- Filter + search ---
   // Each entry tracks the card AND its original index in the cards array
@@ -606,6 +656,14 @@ export default function VanguardVault() {
     setCroppedFrontUrl(null);
     setCroppedBackUrl(null);
     setProModalEdit(false);
+    setEbayComps([]);
+    setEbayCompsLoading(false);
+    setEbayCompsError(null);
+    setEbayCompsAvg(null);
+    setEbayCompsLow(null);
+    setEbayCompsHigh(null);
+    setEbayCompsTotal(0);
+    setEbayCompsOpen(false);
   };
 
   const handleEditCard = (cardIndex: number) => {
@@ -643,11 +701,15 @@ export default function VanguardVault() {
     setFormPurchase(card.purchase || "");
     setEditingIndex(cardIndex);
     setModalOpen(true);
+    setEbayCompsOpen(false);
 
     // Auto-fetch PSA data if card has a cert number
     if (card.certNumber) {
       fetchPsaCert(card.certNumber);
     }
+
+    // Auto-fetch eBay comps
+    fetchEbayComps(card);
   };
 
   const handleScanFile = (file: File, side: "front" | "back") => {
@@ -694,6 +756,17 @@ export default function VanguardVault() {
           product: card.product,
           verified: card.verified,
         });
+        // Persist PSA image to card state so grid view can show it
+        if (card.imageUrl && editingIndex !== null) {
+          setCards((prev) => {
+            const updated = [...prev];
+            const existing = updated[editingIndex];
+            if (existing && !existing._psaImageUrl) {
+              updated[editingIndex] = { ...existing, _psaImageUrl: card.imageUrl };
+            }
+            return updated;
+          });
+        }
         return card;
       }
       return null;
@@ -701,6 +774,44 @@ export default function VanguardVault() {
       return null;
     } finally {
       setPsaLoading(false);
+    }
+  };
+
+  const fetchEbayComps = async (card: Card) => {
+    setEbayCompsLoading(true);
+    setEbayCompsError(null);
+    setEbayComps([]);
+    setEbayCompsAvg(null);
+    setEbayCompsLow(null);
+    setEbayCompsHigh(null);
+    setEbayCompsTotal(0);
+
+    try {
+      const info = players[card.player];
+      const playerName = info?.full || card.player;
+      const gradeStr = card.psa > 0 ? `PSA ${card.psa}` : "";
+      const query = `${playerName} ${card.year} ${card.product} ${gradeStr}`.trim();
+
+      const res = await fetch(`/api/ebay-prices?q=${encodeURIComponent(query)}&limit=10`);
+      if (!res.ok) throw new Error("Failed to fetch eBay comps");
+      const data = await res.json();
+
+      const results = data.results || [];
+      setEbayComps(results);
+      setEbayCompsTotal(data.total || 0);
+
+      if (results.length > 0) {
+        const prices = results.map((r: { price: number }) => r.price).filter((p: number) => p > 0);
+        if (prices.length > 0) {
+          setEbayCompsAvg(Math.round(prices.reduce((a: number, b: number) => a + b, 0) / prices.length));
+          setEbayCompsLow(Math.min(...prices));
+          setEbayCompsHigh(Math.max(...prices));
+        }
+      }
+    } catch (err) {
+      setEbayCompsError(err instanceof Error ? err.message : "Failed to load eBay comps");
+    } finally {
+      setEbayCompsLoading(false);
     }
   };
 
@@ -877,24 +988,30 @@ export default function VanguardVault() {
       }
       setScanConfidence(card.confidence);
 
+      // Helper: convert Blob to data URL
+      const blobToDataUrl = (blob: Blob): Promise<string> =>
+        new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+
       // Crop and upload card images using bounding boxes
       try {
-        if (card.frontBoundingBox) {
-          const croppedFront = await cropCardImage(front, card.frontBoundingBox);
-          const frontUrl = await uploadCardImage(croppedFront, "front");
-          if (frontUrl) {
-            setScanFrontPreview(URL.createObjectURL(croppedFront));
-            setCroppedFrontUrl(frontUrl);
-          }
-        }
-        if (card.backBoundingBox) {
-          const croppedBack = await cropCardImage(back, card.backBoundingBox);
-          const backUrl = await uploadCardImage(croppedBack, "back");
-          if (backUrl) {
-            setScanBackPreview(URL.createObjectURL(croppedBack));
-            setCroppedBackUrl(backUrl);
-          }
-        }
+        const frontBlob = card.frontBoundingBox
+          ? await cropCardImage(front, card.frontBoundingBox)
+          : front;
+        setScanFrontPreview(URL.createObjectURL(frontBlob));
+        const frontUrl = await uploadCardImage(frontBlob, "front");
+        setCroppedFrontUrl(frontUrl || await blobToDataUrl(frontBlob));
+
+        const backBlob = card.backBoundingBox
+          ? await cropCardImage(back, card.backBoundingBox)
+          : back;
+        setScanBackPreview(URL.createObjectURL(backBlob));
+        const backUrl = await uploadCardImage(backBlob, "back");
+        setCroppedBackUrl(backUrl || await blobToDataUrl(backBlob));
       } catch (cropErr) {
         console.error("Crop/upload error:", cropErr);
         // Non-fatal — card data was still extracted
@@ -957,10 +1074,11 @@ export default function VanguardVault() {
 
     const certNumber = formCert.trim() || undefined;
     const purchase = formPurchase.trim() || "";
+    const existingImages = editingIndex !== null ? cards[editingIndex] : null;
     const card: Card = {
       year, player: playerKey, product, psa, value, pct, range, certNumber, purchase,
-      frontImageUrl: croppedFrontUrl || undefined,
-      backImageUrl: croppedBackUrl || undefined,
+      frontImageUrl: croppedFrontUrl || existingImages?.frontImageUrl || undefined,
+      backImageUrl: croppedBackUrl || existingImages?.backImageUrl || undefined,
     };
 
     const provider = PROVIDERS[activeProvider];
@@ -1753,6 +1871,60 @@ export default function VanguardVault() {
                     <div className="sold-info-row"><span>Sold:</span><span className="sold-info-value">{new Date(detailCard.soldAt).toLocaleString()}</span></div>
                   </div>
                 )}
+
+                {/* eBay Comps */}
+                <div className="ebay-comps-section">
+                  <div className="ebay-comps-header" onClick={() => setEbayCompsOpen(!ebayCompsOpen)}>
+                    <h4 className="ebay-comps-title">eBay Market Comps</h4>
+                    <span className="ebay-comps-toggle">{ebayCompsOpen ? "\u25B2" : "\u25BC"}</span>
+                  </div>
+
+                  {/* Summary always visible */}
+                  {ebayCompsLoading && <div className="ebay-comps-loading">Searching eBay...</div>}
+                  {ebayCompsError && <div className="ebay-comps-error">{ebayCompsError}</div>}
+                  {!ebayCompsLoading && !ebayCompsError && ebayCompsAvg !== null && (
+                    <div className="ebay-comps-summary">
+                      <div className="ebay-stat">
+                        <span className="ebay-stat-label">Avg</span>
+                        <span className="ebay-stat-value">${ebayCompsAvg.toLocaleString()}</span>
+                      </div>
+                      <div className="ebay-stat">
+                        <span className="ebay-stat-label">Low</span>
+                        <span className="ebay-stat-value">${ebayCompsLow?.toLocaleString()}</span>
+                      </div>
+                      <div className="ebay-stat">
+                        <span className="ebay-stat-label">High</span>
+                        <span className="ebay-stat-value">${ebayCompsHigh?.toLocaleString()}</span>
+                      </div>
+                      <div className="ebay-stat">
+                        <span className="ebay-stat-label">Listings</span>
+                        <span className="ebay-stat-value">{ebayCompsTotal.toLocaleString()}</span>
+                      </div>
+                    </div>
+                  )}
+                  {!ebayCompsLoading && !ebayCompsError && ebayComps.length === 0 && ebayCompsAvg === null && (
+                    <div className="ebay-comps-empty">No eBay listings found for this card.</div>
+                  )}
+
+                  {/* Expanded listing detail */}
+                  {ebayCompsOpen && ebayComps.length > 0 && (
+                    <div className="ebay-comps-list">
+                      {ebayComps.map((comp) => (
+                        <a key={comp.itemId} href={comp.itemUrl} target="_blank" rel="noopener noreferrer" className="ebay-comp-item">
+                          {comp.imageUrl && (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={comp.imageUrl} alt="" className="ebay-comp-img" />
+                          )}
+                          <div className="ebay-comp-info">
+                            <span className="ebay-comp-title">{comp.title}</span>
+                            <span className="ebay-comp-meta">{comp.condition} &middot; {comp.seller}</span>
+                          </div>
+                          <span className="ebay-comp-price">${comp.price.toLocaleString()}</span>
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
                 {/* Action buttons */}
                 <div className="pro-detail-actions">

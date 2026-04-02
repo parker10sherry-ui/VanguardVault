@@ -21,6 +21,7 @@ body {
     background: var(--bg-dark);
     color: var(--text-primary);
     min-height: 100vh;
+    overflow-x: hidden;
 }
 
 /* === HEADER === */
@@ -116,6 +117,7 @@ header {
     font-family: 'Inter', sans-serif;
     transition: border-color 0.2s;
     min-width: 220px;
+    max-width: 100%;
 }
 .filter-select:focus {
     outline: none;
@@ -331,7 +333,7 @@ main {
     position: fixed;
     inset: 0;
     background: rgba(0,0,0,0.7);
-    z-index: 200;
+    z-index: 6000;
     align-items: center;
     justify-content: center;
 }
@@ -559,15 +561,34 @@ main {
 @media (max-width: 768px) {
     header {
         flex-direction: column;
-        gap: 0.75rem;
-        align-items: flex-start;
+        gap: 0.5rem;
+        align-items: stretch;
+        padding: 0.75rem 1rem;
     }
     .header-right {
         width: 100%;
-        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 0.5rem;
     }
-    .search-box input { width: 150px; }
-    main { padding: 1rem; }
+    .search-box {
+        order: 10;
+        flex: 1 1 100%;
+    }
+    .search-box input {
+        width: 100%;
+    }
+    .add-card-btn {
+        padding: 0.4rem 0.8rem;
+        font-size: 0.75rem;
+    }
+    .psa-lookup-btn {
+        padding: 0.4rem 0.8rem;
+        font-size: 0.7rem;
+    }
+    .logo { font-size: 1.3rem; letter-spacing: 2px; }
+    .subtitle { font-size: 0.7rem; letter-spacing: 1px; }
+    .status-bar { padding: 0.4rem 1rem; flex-wrap: wrap; gap: 0.25rem; }
+    main { padding: 0.75rem; }
     .card-table { font-size: 0.75rem; }
     .card-table td, .card-table thead th { padding: 0.4rem 0.5rem; }
     .player-photo { width: 45px; height: 45px; }
@@ -1306,6 +1327,11 @@ main {
 
     .filter-bar {
         flex-wrap: wrap;
+        padding: 0.75rem 1rem;
+    }
+    .filter-select {
+        min-width: 0;
+        flex: 1 1 auto;
     }
 }
 
@@ -1430,6 +1456,120 @@ main {
     color: var(--accent-gold);
     font-family: 'Orbitron', sans-serif;
 }
+/* --- eBay Comps Section --- */
+.ebay-comps-section {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-dark);
+    overflow: hidden;
+}
+.ebay-comps-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.65rem 0.85rem;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s;
+}
+.ebay-comps-header:hover {
+    background: var(--bg-card);
+}
+.ebay-comps-title {
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--accent-gold);
+    margin: 0;
+}
+.ebay-comps-toggle {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+}
+.ebay-comps-loading, .ebay-comps-error, .ebay-comps-empty {
+    padding: 0.6rem 0.85rem;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+.ebay-comps-error { color: var(--accent-red); }
+.ebay-comps-summary {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.4rem;
+    padding: 0.5rem 0.85rem 0.65rem;
+    border-top: 1px solid var(--border);
+}
+.ebay-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.1rem;
+}
+.ebay-stat-label {
+    font-size: 0.6rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+}
+.ebay-stat-value {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-family: 'Orbitron', sans-serif;
+}
+.ebay-comps-list {
+    border-top: 1px solid var(--border);
+    max-height: 360px;
+    overflow-y: auto;
+}
+.ebay-comp-item {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.5rem 0.85rem;
+    border-bottom: 1px solid var(--border);
+    text-decoration: none;
+    color: var(--text-primary);
+    transition: background 0.15s;
+}
+.ebay-comp-item:last-child { border-bottom: none; }
+.ebay-comp-item:hover { background: var(--bg-card-hover); }
+.ebay-comp-img {
+    width: 44px;
+    height: 44px;
+    object-fit: cover;
+    border-radius: 4px;
+    flex-shrink: 0;
+    background: var(--bg-card);
+}
+.ebay-comp-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+}
+.ebay-comp-title {
+    font-size: 0.72rem;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.ebay-comp-meta {
+    font-size: 0.62rem;
+    color: var(--text-muted);
+}
+.ebay-comp-price {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--accent-green);
+    font-family: 'Orbitron', sans-serif;
+    flex-shrink: 0;
+}
+
 .pro-detail-actions {
     display: flex;
     gap: 0.75rem;
@@ -1713,27 +1853,33 @@ main {
         display: flex;
         flex-direction: column;
         align-items: center;
+        justify-content: center;
         gap: 0.15rem;
         background: none;
         border: none;
         color: var(--text-muted);
         cursor: pointer;
-        padding: 0.3rem 0;
-        transition: color 0.2s;
+        min-height: 48px;
+        padding: 0.5rem 0;
+        -webkit-tap-highlight-color: transparent;
+        transition: color 0.2s, opacity 0.15s;
+    }
+    .bottom-nav-btn:active {
+        opacity: 0.6;
     }
     .bottom-nav-btn.active {
         color: var(--accent-gold);
     }
     .bottom-nav-icon {
-        font-size: 1.3rem;
+        font-size: 1.4rem;
         line-height: 1;
     }
     .bottom-nav-scan {
-        font-size: 1.6rem;
+        font-size: 1.7rem;
         color: var(--accent-gold);
     }
     .bottom-nav-label {
-        font-size: 0.6rem;
+        font-size: 0.65rem;
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.5px;
