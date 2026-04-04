@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import type { Card, PlayerInfo, DataStatus, DataProvider } from "@/lib/types";
 import { LocalProvider, MockProvider, AltProvider, PSAProvider, SupabaseProvider } from "@/lib/providers";
+import { updateCardAtIndex } from "@/lib/providers/localProvider";
 import { supabase } from "@/lib/supabase/client";
 
 // ============================================================
@@ -37,6 +38,10 @@ function parsePct(pct: string) {
     dir,
     display: `${arrow} ${clean.replace("U", "").replace("D", "").trim()}`,
   };
+}
+
+function getCostBasis(card?: Card): number {
+  return parseFloat(card?.purchase || "0") || 0;
 }
 
 function getPlayerImage(
@@ -124,6 +129,7 @@ export default function VanguardVault() {
   const [proModalEdit, setProModalEdit] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [proTab, setProTab] = useState<"portfolio" | "scan" | "watchlist">("portfolio");
+  const psaRequestIdRef = useRef(0);
 
   // --- Watchlist state ---
   const [watchlist, setWatchlist] = useState<{ player: string; year: number; product: string; psa: number; targetPrice: number; notes: string }[]>(() => {
@@ -380,7 +386,7 @@ export default function VanguardVault() {
         so.push(ci.card.player);
       }
       sg[ci.card.player].push(ci);
-      profit += (ci.card.salePrice || 0) - (ci.card.value || 0);
+      profit += (ci.card.salePrice || 0) - getCostBasis(ci.card);
     });
 
     return { groups: g, order: o, soldGroups: sg, soldOrder: so, totalProfit: profit };
@@ -437,7 +443,7 @@ export default function VanguardVault() {
     const sold = cards.filter((c) => !!c.soldAt);
     const totalValue = active.reduce((sum, c) => sum + (c.value || 0), 0);
     const totalCards = active.length;
-    const realizedProfit = sold.reduce((sum, c) => sum + ((c.salePrice || 0) - (c.value || 0)), 0);
+    const realizedProfit = sold.reduce((sum, c) => sum + ((c.salePrice || 0) - getCostBasis(c)), 0);
     const soldCount = sold.length;
 
     // Count by grade
@@ -544,7 +550,7 @@ export default function VanguardVault() {
     active.forEach((c) => {
       if (!playerTotals[c.player]) playerTotals[c.player] = { value: 0, costBasis: 0 };
       playerTotals[c.player].value += c.value || 0;
-      playerTotals[c.player].costBasis += parseInt(c.purchase || "0") || 0;
+      playerTotals[c.player].costBasis += getCostBasis(c);
     });
 
     for (const [key, totals] of Object.entries(playerTotals)) {
@@ -553,7 +559,7 @@ export default function VanguardVault() {
     }
 
     byPlayer.sort((a, b) => b.value - a.value);
-    const totalCostBasis = active.reduce((sum, c) => sum + (parseInt(c.purchase || "0") || 0), 0);
+    const totalCostBasis = active.reduce((sum, c) => sum + getCostBasis(c), 0);
     const totalValue = active.reduce((sum, c) => sum + (c.value || 0), 0);
     const unrealizedPL = totalValue - totalCostBasis;
 
@@ -749,7 +755,7 @@ export default function VanguardVault() {
 
     // Auto-fetch PSA data if card has a cert number
     if (card.certNumber) {
-      fetchPsaCert(card.certNumber);
+      fetchPsaCert(card.certNumber, cardIndex);
     }
 
     // Auto-fetch eBay comps
@@ -782,11 +788,13 @@ export default function VanguardVault() {
     setScanError(null);
   };
 
-  const fetchPsaCert = async (certNumber: string) => {
+  const fetchPsaCert = async (certNumber: string, targetIndex?: number) => {
+    const requestId = ++psaRequestIdRef.current;
     try {
       setPsaLoading(true);
       const res = await fetch(`/api/psa-cards?certs=${certNumber}`);
       const data = await res.json();
+      if (requestId !== psaRequestIdRef.current) return null;
       if (data.cards && data.cards.length > 0) {
         const card = data.cards[0];
         setPsaData({
@@ -801,12 +809,12 @@ export default function VanguardVault() {
           verified: card.verified,
         });
         // Persist PSA image to card state so grid view can show it
-        if (card.imageUrl && editingIndex !== null) {
+        if (card.imageUrl && targetIndex !== undefined) {
           setCards((prev) => {
             const updated = [...prev];
-            const existing = updated[editingIndex];
-            if (existing && !existing._psaImageUrl) {
-              updated[editingIndex] = { ...existing, _psaImageUrl: card.imageUrl };
+            const existing = updated[targetIndex];
+            if (existing && existing.certNumber === certNumber && !existing._psaImageUrl) {
+              updated[targetIndex] = { ...existing, _psaImageUrl: card.imageUrl };
             }
             return updated;
           });
@@ -815,9 +823,12 @@ export default function VanguardVault() {
       }
       return null;
     } catch {
+      if (requestId !== psaRequestIdRef.current) return null;
       return null;
     } finally {
-      setPsaLoading(false);
+      if (requestId === psaRequestIdRef.current) {
+        setPsaLoading(false);
+      }
     }
   };
 
@@ -1194,6 +1205,8 @@ export default function VanguardVault() {
       if (existingCard?.id && provider.updateCard) {
         // Database-backed provider (Supabase)
         await provider.updateCard(existingCard.id, card);
+      } else if (activeProvider === "local") {
+        updateCardAtIndex(editingIndex, card);
       }
       // Update local state immediately
       setCards((prev) => {
@@ -1235,6 +1248,8 @@ export default function VanguardVault() {
     const provider = PROVIDERS[activeProvider];
     if (existingCard?.id && provider.updateCard) {
       await provider.updateCard(existingCard.id, soldCard);
+    } else if (activeProvider === "local") {
+      updateCardAtIndex(editingIndex, soldCard);
     }
 
     setCards((prev) => {
@@ -1264,6 +1279,8 @@ export default function VanguardVault() {
     const provider = PROVIDERS[activeProvider];
     if (existingCard?.id && provider.updateCard) {
       await provider.updateCard(existingCard.id, restoredCard);
+    } else if (activeProvider === "local") {
+      updateCardAtIndex(editingIndex, restoredCard);
     }
 
     setCards((prev) => {
@@ -1922,7 +1939,7 @@ export default function VanguardVault() {
                     <tbody>
                       {playerCards.map((ci, i) => {
                         const c = ci.card;
-                        const profit = (c.salePrice || 0) - (c.value || 0);
+                        const profit = (c.salePrice || 0) - getCostBasis(c);
                         return (
                           <tr key={`sold-${c.player}-${i}`} className="card-row-clickable" onClick={() => handleEditCard(ci.originalIndex)}>
                             <td className="year">{c.year}</td>
@@ -2049,8 +2066,8 @@ export default function VanguardVault() {
                     <div className="sold-info-row"><span>Sale Price:</span><span className="sold-info-value">${detailCard.salePrice?.toLocaleString()}</span></div>
                     <div className="sold-info-row">
                       <span>Profit:</span>
-                      <span className={((detailCard.salePrice || 0) - (detailCard.value || 0)) >= 0 ? "profit-positive" : "profit-negative"}>
-                        {((detailCard.salePrice || 0) - (detailCard.value || 0)) >= 0 ? "+" : ""}${((detailCard.salePrice || 0) - (detailCard.value || 0)).toLocaleString()}
+                      <span className={((detailCard.salePrice || 0) - getCostBasis(detailCard)) >= 0 ? "profit-positive" : "profit-negative"}>
+                        {((detailCard.salePrice || 0) - getCostBasis(detailCard)) >= 0 ? "+" : ""}${((detailCard.salePrice || 0) - getCostBasis(detailCard)).toLocaleString()}
                       </span>
                     </div>
                     <div className="sold-info-row"><span>Sold:</span><span className="sold-info-value">{new Date(detailCard.soldAt).toLocaleString()}</span></div>
@@ -2427,11 +2444,11 @@ export default function VanguardVault() {
                     <div className="sell-profit-preview">
                       <span>Profit: </span>
                       <span className={
-                        (parseFloat(formSalePrice) - (cards[editingIndex]?.value || 0)) >= 0
+                        (parseFloat(formSalePrice) - getCostBasis(cards[editingIndex])) >= 0
                           ? "profit-positive" : "profit-negative"
                       }>
-                        {(parseFloat(formSalePrice) - (cards[editingIndex]?.value || 0)) >= 0 ? "+" : ""}
-                        ${(parseFloat(formSalePrice) - (cards[editingIndex]?.value || 0)).toLocaleString()}
+                        {(parseFloat(formSalePrice) - getCostBasis(cards[editingIndex])) >= 0 ? "+" : ""}
+                        ${(parseFloat(formSalePrice) - getCostBasis(cards[editingIndex])).toLocaleString()}
                       </span>
                     </div>
                   )}
@@ -2458,11 +2475,11 @@ export default function VanguardVault() {
               <div className="sold-info-row">
                 <span>Profit:</span>
                 <span className={
-                  ((cards[editingIndex]?.salePrice || 0) - (cards[editingIndex]?.value || 0)) >= 0
+                  ((cards[editingIndex]?.salePrice || 0) - getCostBasis(cards[editingIndex])) >= 0
                     ? "profit-positive" : "profit-negative"
                 }>
-                  {((cards[editingIndex]?.salePrice || 0) - (cards[editingIndex]?.value || 0)) >= 0 ? "+" : ""}
-                  ${((cards[editingIndex]?.salePrice || 0) - (cards[editingIndex]?.value || 0)).toLocaleString()}
+                  {((cards[editingIndex]?.salePrice || 0) - getCostBasis(cards[editingIndex])) >= 0 ? "+" : ""}
+                  ${((cards[editingIndex]?.salePrice || 0) - getCostBasis(cards[editingIndex])).toLocaleString()}
                 </span>
               </div>
               <div className="sold-info-row">

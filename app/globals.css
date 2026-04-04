@@ -2,6 +2,8 @@
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
 :root {
+    --fallback-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    --fallback-display: -apple-system, BlinkMacSystemFont, sans-serif;
     --bg-dark: #0a0e1a;
     --bg-card: #111827;
     --bg-card-hover: #1a2340;
@@ -17,7 +19,7 @@
 }
 
 body {
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-sans, var(--fallback-sans));
     background: var(--bg-dark);
     color: var(--text-primary);
     min-height: 100vh;
@@ -38,7 +40,7 @@ header {
 }
 
 .logo {
-    font-family: 'Orbitron', sans-serif;
+    font-family: var(--font-display, var(--fallback-display));
     font-size: 1.8rem;
     font-weight: 900;
     color: var(--text-primary);
@@ -90,7 +92,7 @@ header {
     cursor: pointer;
     transition: all 0.2s;
     letter-spacing: 0.5px;
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-sans, var(--fallback-sans));
 }
 .add-card-btn:hover {
     background: #e6bc5a;
@@ -114,7 +116,7 @@ header {
     border-radius: 8px;
     font-size: 0.85rem;
     cursor: pointer;
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-sans, var(--fallback-sans));
     transition: border-color 0.2s;
     min-width: 220px;
     max-width: 100%;
@@ -164,7 +166,7 @@ header {
     border-radius: 4px;
     font-size: 0.7rem;
     cursor: pointer;
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-sans, var(--fallback-sans));
     transition: border-color 0.2s;
 }
 .provider-select:focus {
@@ -184,7 +186,7 @@ header {
     font-size: 0.7rem;
     cursor: pointer;
     transition: all 0.2s;
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-sans, var(--fallback-sans));
 }
 .refresh-btn:hover {
     border-color: var(--accent-gold);
@@ -250,7 +252,7 @@ main {
     background: var(--bg-card);
 }
 .player-info h2 {
-    font-family: 'Orbitron', sans-serif;
+    font-family: var(--font-display, var(--fallback-display));
     font-size: 1.15rem;
     font-weight: 700;
     color: var(--text-primary);
@@ -356,7 +358,7 @@ main {
     margin-bottom: 1.5rem;
 }
 .modal-header h3 {
-    font-family: 'Orbitron', sans-serif;
+    font-family: var(--font-display, var(--fallback-display));
     color: var(--accent-gold);
     font-size: 1.1rem;
 }
@@ -402,7 +404,7 @@ main {
     padding: 0.5rem 0.75rem;
     border-radius: 6px;
     font-size: 0.85rem;
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-sans, var(--fallback-sans));
 }
 .form-group input:focus,
 .form-group select:focus {
@@ -429,7 +431,7 @@ main {
     font-weight: 700;
     cursor: pointer;
     margin-top: 0.5rem;
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-sans, var(--fallback-sans));
     transition: background 0.2s;
 }
 .form-submit:hover { background: #e6bc5a; }
@@ -494,7 +496,7 @@ main {
     cursor: pointer;
     transition: all 0.2s;
     letter-spacing: 0.5px;
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-sans, var(--fallback-sans));
     white-space: nowrap;
     align-self: center;
 }
@@ -546,7 +548,7 @@ main {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-family: 'Orbitron', sans-serif;
+    font-family: var(--font-display, var(--fallback-display));
     font-weight: 700;
     font-size: 1rem;
     color: var(--accent-gold);
@@ -660,7 +662,7 @@ main {
     font-size: 0.85rem;
     font-weight: 700;
     cursor: pointer;
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-sans, var(--fallback-sans));
     transition: all 0.2s;
 }
 .sell-confirm-btn:hover:not(:disabled) {
@@ -710,7 +712,7 @@ main {
     padding: 0.4rem 0.6rem;
     border-radius: 6px;
     font-size: 0.8rem;
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-sans, var(--fallback-sans));
 }
 .unsell-code-input:focus {
     outline: none;
@@ -725,7 +727,7 @@ main {
     font-size: 0.75rem;
     font-weight: 600;
     cursor: pointer;
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-sans, var(--fallback-sans));
     transition: all 0.2s;
     white-space: nowrap;
 }
@@ -749,7 +751,7 @@ main {
     cursor: pointer;
 }
 .sold-section-header h2 {
-    font-family: 'Orbitron', sans-serif;
+    font-family: var(--font-display, var(--fallback-display));
     font-size: 1rem;
     color: var(--text-muted);
     text-transform: uppercase;
@@ -846,7 +848,7 @@ main {
     cursor: pointer;
     transition: all 0.2s;
     letter-spacing: 0.5px;
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-sans, var(--fallback-sans));
 }
 .psa-lookup-btn:hover {
     background: var(--accent-green);
@@ -865,7 +867,7 @@ main {
     cursor: pointer;
     transition: all 0.2s;
     letter-spacing: 0.5px;
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-sans, var(--fallback-sans));
 }
 .ebay-check-btn:hover {
     background: #f59e0b;
@@ -891,7 +893,7 @@ main {
     background: var(--card-bg);
     color: var(--text-primary);
     font-size: 0.85rem;
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-sans, var(--fallback-sans));
 }
 .ebay-check-input:focus {
     outline: none;
@@ -904,7 +906,7 @@ main {
     background: var(--card-bg);
     color: var(--text-primary);
     font-size: 0.8rem;
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-sans, var(--fallback-sans));
     cursor: pointer;
 }
 .ebay-check-mic {
@@ -940,7 +942,7 @@ main {
     font-weight: 700;
     cursor: pointer;
     transition: all 0.2s;
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-sans, var(--fallback-sans));
     white-space: nowrap;
 }
 .ebay-check-go:hover { background: #d97706; }
@@ -1000,7 +1002,7 @@ main {
     padding: 0.5rem 0.75rem;
     border-radius: 6px;
     font-size: 0.85rem;
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-sans, var(--fallback-sans));
 }
 .psa-lookup-input:focus {
     outline: none;
@@ -1015,7 +1017,7 @@ main {
     font-size: 0.85rem;
     font-weight: 700;
     cursor: pointer;
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-sans, var(--fallback-sans));
     white-space: nowrap;
     transition: all 0.2s;
 }
@@ -1228,7 +1230,7 @@ main {
     font-weight: 600;
 }
 .dash-value {
-    font-family: 'Orbitron', sans-serif;
+    font-family: var(--font-display, var(--fallback-display));
     font-size: 1.35rem;
     font-weight: 700;
     color: var(--text-primary);
@@ -1258,7 +1260,7 @@ main {
     border-bottom: 1px solid var(--border);
 }
 .movers-title {
-    font-family: 'Orbitron', sans-serif;
+    font-family: var(--font-display, var(--fallback-display));
     font-size: 0.75rem;
     font-weight: 700;
     text-transform: uppercase;
@@ -1356,7 +1358,7 @@ main {
     background: linear-gradient(135deg, var(--bg-card), var(--bg-dark));
 }
 .grid-psa-badge {
-    font-family: 'Orbitron', sans-serif;
+    font-family: var(--font-display, var(--fallback-display));
     font-size: 0.65rem;
     font-weight: 700;
     padding: 0.2rem 0.5rem;
@@ -1540,7 +1542,7 @@ main {
     text-align: center;
 }
 .pro-detail-name {
-    font-family: 'Orbitron', sans-serif;
+    font-family: var(--font-display, var(--fallback-display));
     font-size: 1.2rem;
     font-weight: 700;
     color: var(--text-primary);
@@ -1581,7 +1583,7 @@ main {
 }
 .pro-stat-gold {
     color: var(--accent-gold);
-    font-family: 'Orbitron', sans-serif;
+    font-family: var(--font-display, var(--fallback-display));
 }
 /* --- eBay Comps Section --- */
 .ebay-comps-section {
@@ -1644,7 +1646,7 @@ main {
     font-size: 0.85rem;
     font-weight: 700;
     color: var(--text-primary);
-    font-family: 'Orbitron', sans-serif;
+    font-family: var(--font-display, var(--fallback-display));
 }
 .ebay-comps-list {
     border-top: 1px solid var(--border);
@@ -1727,7 +1729,7 @@ main {
     font-size: 0.85rem;
     font-weight: 700;
     color: var(--accent-green);
-    font-family: 'Orbitron', sans-serif;
+    font-family: var(--font-display, var(--fallback-display));
     flex-shrink: 0;
 }
 
@@ -1829,7 +1831,7 @@ main {
     margin-bottom: 0.75rem;
 }
 .pro-chart-title {
-    font-family: 'Orbitron', sans-serif;
+    font-family: var(--font-display, var(--fallback-display));
     font-size: 0.8rem;
     font-weight: 700;
     text-transform: uppercase;
@@ -1922,7 +1924,7 @@ main {
     margin-bottom: 1rem;
 }
 .watchlist-title {
-    font-family: 'Orbitron', sans-serif;
+    font-family: var(--font-display, var(--fallback-display));
     font-size: 1rem;
     font-weight: 700;
     color: var(--text-primary);
